@@ -92,6 +92,17 @@ class ValidateGraph(WorkflowPlugin):
             sleep(1)
             setup_cmempy_user_access(context=context.user)
             state.refresh()
+            if context.workflow.status() != "Running":
+                validation.cancel(batch_id=process_id)
+                context.report.update(
+                    ExecutionReport(
+                        entity_count=state.completed,
+                        operation="read",
+                        operation_desc=f"/ {state.total} Resources validated (cancelled)",
+                    )
+                )
+                self.log.info("End validation task (Cancelled Workflow).")
+                return
             if state.status in (validation.STATUS_SCHEDULED, validation.STATUS_RUNNING):
                 # when reported as running or scheduled, start another loop
                 context.report.update(
