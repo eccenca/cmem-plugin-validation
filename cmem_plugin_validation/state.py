@@ -1,4 +1,5 @@
 """Graph validation process state"""
+
 from cmem.cmempy.dp.shacl import validation
 
 

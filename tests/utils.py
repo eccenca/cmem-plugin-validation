@@ -1,4 +1,8 @@
-"""Testing utilities."""
+"""Testing utilities.
+
+Remove this and other example files after bootstrapping your project.
+"""
+
 import os
 from typing import ClassVar
 

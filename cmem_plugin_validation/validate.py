@@ -1,4 +1,5 @@
 """Graph validation workflow task"""
+
 import json
 from collections.abc import Sequence
 from time import sleep

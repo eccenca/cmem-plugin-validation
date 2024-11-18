@@ -1,1 +1,1 @@
-"""validation - main package"""
+"""cmem-plugin-validation"""
