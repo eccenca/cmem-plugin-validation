@@ -6,7 +6,11 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/) and this p
 
 ## [Unreleased]
 
-TODO: add at least one Added, Changed, Deprecated, Removed, Fixed or Security section
+### Added
+
+- custom icon
+- option to output violations as entities (fixed schema port)
+
 
 ## [0.5.0] 2024-11-18
 

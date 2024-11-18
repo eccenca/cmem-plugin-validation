@@ -7,14 +7,20 @@ from time import sleep
 from cmem.cmempy.dp.proxy import graph as graph_api
 from cmem.cmempy.dp.shacl import validation
 from cmem_plugin_base.dataintegration.context import ExecutionContext, ExecutionReport
-from cmem_plugin_base.dataintegration.description import Plugin, PluginParameter
+from cmem_plugin_base.dataintegration.description import Icon, Plugin, PluginParameter
 from cmem_plugin_base.dataintegration.entity import (
     Entities,
+    EntityPath,
+    EntitySchema,
 )
 from cmem_plugin_base.dataintegration.parameter.graph import GraphParameterType
 from cmem_plugin_base.dataintegration.plugins import WorkflowPlugin
-from cmem_plugin_base.dataintegration.ports import FixedNumberOfInputs
+from cmem_plugin_base.dataintegration.ports import (
+    FixedNumberOfInputs,
+    FixedSchemaPort,
+)
 from cmem_plugin_base.dataintegration.utils import setup_cmempy_user_access
+from cmem_plugin_base.dataintegration.utils.entity_builder import build_entities_from_data
 from requests import HTTPError
 
 from cmem_plugin_validation.state import State
@@ -24,9 +30,16 @@ A validation process verifies, that resources in a specific graph are valid acco
 the node shapes in a shape catalog graph.
 """
 
+DEFAULT_SHAPE_GRAPH = "https://vocab.eccenca.com/shacl/"
+DEFAULT_RESULT_GRAPH = ""
+DEFAULT_CLEAR_RESULT_GRAPH = False
+DEFAULT_FAIL_ON_VIOLATION = False
+DEFAULT_OUTPUT_RESULTS = True
+
 
 @Plugin(
     label="Validate Knowledge Graph",
+    icon=Icon(file_name="logo.svg", package=__package__),
     description="Validate resources in a context graph based on node and property"
     " shapes from a Shape Catalog graph.",
     documentation=DOCUMENTATION,
@@ -44,18 +57,19 @@ the node shapes in a shape catalog graph.
         ),
         PluginParameter(
             name="shape_graph",
-            label="Shape Graph",
+            label="Shape graph",
             description="This graph holds the shapes you want to use for validation.",
             param_type=GraphParameterType(
                 classes=["https://vocab.eccenca.com/shui/ShapeCatalog"], show_system_graphs=True
             ),
-            default_value="https://vocab.eccenca.com/shacl/",
+            default_value=DEFAULT_SHAPE_GRAPH,
         ),
         PluginParameter(
             name="result_graph",
-            label="Result Graph",
+            label="Result graph",
             description="In this graph, the validation results are materialized. "
             "If left empty, results are not materialized.",
+            default_value=DEFAULT_RESULT_GRAPH,
             param_type=GraphParameterType(
                 show_di_graphs=False,
                 show_graphs_without_class=True,
@@ -65,50 +79,76 @@ the node shapes in a shape catalog graph.
         ),
         PluginParameter(
             name="clear_result_graph",
-            label="Clear Result Graph",
-            description="If enabled, the result graph will be cleared before validation.",
+            label="Clear result graph before validation",
+            default_value=DEFAULT_CLEAR_RESULT_GRAPH,
         ),
         PluginParameter(
             name="fail_on_violations",
-            label="Fail on Violations",
-            description="If enabled, found violations will lead to a workflow failure.",
+            label="Fail workflow on violations",
+            default_value=DEFAULT_FAIL_ON_VIOLATION,
+        ),
+        PluginParameter(
+            name="output_results",
+            label="Output violations as entities",
+            default_value=DEFAULT_OUTPUT_RESULTS,
         ),
     ],
 )
 class ValidateGraph(WorkflowPlugin):
     """Validate resources in a graph"""
 
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
         context_graph: str,
-        shape_graph: str,
-        result_graph: str,
-        clear_result_graph: bool,
-        fail_on_violations: bool = True,
+        shape_graph: str = DEFAULT_SHAPE_GRAPH,
+        result_graph: str = DEFAULT_RESULT_GRAPH,
+        clear_result_graph: bool = DEFAULT_CLEAR_RESULT_GRAPH,
+        fail_on_violations: bool = DEFAULT_FAIL_ON_VIOLATION,
+        output_results: bool = DEFAULT_OUTPUT_RESULTS,
     ) -> None:
         self.context_graph = context_graph
         self.shape_graph = shape_graph
         self.result_graph = result_graph
         self.fail_on_violations = fail_on_violations
         self.clear_result_graph = clear_result_graph
+        self.output_results = output_results
         self.input_ports = FixedNumberOfInputs([])
-        self.output_port = None
+        if self.output_results:
+            self.output_port = FixedSchemaPort(schema=self.output_schema)
+        else:
+            self.output_port = None
+
+    @property
+    def output_schema(self) -> EntitySchema:
+        """The violations schema"""
+        return EntitySchema(
+            type_uri="https://vocab.eccenca.com/validation/Violation",
+            paths=[
+                EntityPath(path="path", is_single_value=True),
+                EntityPath(path="focusNode", is_single_value=True),
+                EntityPath(path="source", is_single_value=True),
+                EntityPath(path="severity", is_single_value=True),
+                EntityPath(path="resourceIri", is_single_value=True),
+                EntityPath(path="nodeShapes", is_single_value=False),
+                EntityPath(path="constraintName", is_single_value=True),
+            ],
+        )
 
     def execute(
         self,
         inputs: Sequence[Entities],  # noqa: ARG002
         context: ExecutionContext,
-    ) -> None:
+    ) -> Entities | None:
         """Run the workflow operator."""
         self.log.info("Start validation task.")
         setup_cmempy_user_access(context=context.user)
-        if self.clear_result_graph:
+        if self.clear_result_graph and self.result_graph:
             graph_api.delete(graph=self.result_graph)
         try:
             process_id = validation.start(
                 context_graph=self.context_graph,
                 shape_graph=self.shape_graph,
-                result_graph=self.result_graph,
+                result_graph=self.result_graph if self.result_graph else None,
             )
         except HTTPError as error_message:
             context.report.update(
@@ -116,7 +156,7 @@ class ValidateGraph(WorkflowPlugin):
                     error=json.loads(error_message.response.text)["detail"],
                 )
             )
-            return
+            return None
         state = State(id_=process_id)
         while True:
             sleep(1)
@@ -132,7 +172,7 @@ class ValidateGraph(WorkflowPlugin):
                     )
                 )
                 self.log.info("End validation task (Cancelled Workflow).")
-                return
+                return None
             if state.status in (validation.STATUS_SCHEDULED, validation.STATUS_RUNNING):
                 # when reported as running or scheduled, start another loop
                 context.report.update(
@@ -149,7 +189,7 @@ class ValidateGraph(WorkflowPlugin):
             (data_key, str(state.data[data_key])) for data_key in state.data
         ]
         validation_message = (
-            f"Found {state.violations} Violations"
+            f"Found {state.violations} Violations "
             f"in {state.with_violations} / {state.total} Resources."
         )
         context.report.update(
@@ -162,4 +202,14 @@ class ValidateGraph(WorkflowPlugin):
                 warnings=[validation_message] if not self.fail_on_violations else None,
             )
         )
-        self.log.info("End validation task.")
+        if not self.output_results:
+            return None
+
+        violations = []
+        for result in list(validation.get(batch_id=process_id)["results"]):
+            for _ in result["violations"]:
+                violation = dict(_)
+                violation.pop("messages", None)
+                violation.pop("reportEntryConstraintMessageTemplate", None)
+                violations.append(violation)
+        return build_entities_from_data(data=violations)

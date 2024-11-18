@@ -12,6 +12,7 @@ class State:
     completed: int
     total: int
     with_violations: int
+    violations: int
 
     def __init__(self, id_: str):
         self.id_ = id_
