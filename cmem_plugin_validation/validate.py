@@ -1,8 +1,10 @@
 """Graph validation workflow task"""
+
 import json
 from collections.abc import Sequence
 from time import sleep
 
+from cmem.cmempy.dp.proxy import graph as graph_api
 from cmem.cmempy.dp.shacl import validation
 from cmem_plugin_base.dataintegration.context import ExecutionContext, ExecutionReport
 from cmem_plugin_base.dataintegration.description import Plugin, PluginParameter
@@ -32,9 +34,9 @@ the node shapes in a shape catalog graph.
         PluginParameter(
             name="context_graph",
             label="Context Graph",
-            description="...",
+            description="This graph holds the resources you want to validate.",
             param_type=GraphParameterType(
-                show_di_graphs=True,
+                show_di_graphs=False,
                 show_graphs_without_class=True,
                 show_system_graphs=True,
                 allow_only_autocompleted_values=False,
@@ -43,16 +45,33 @@ the node shapes in a shape catalog graph.
         PluginParameter(
             name="shape_graph",
             label="Shape Graph",
-            description="...",
+            description="This graph holds the shapes you want to use for validation.",
             param_type=GraphParameterType(
                 classes=["https://vocab.eccenca.com/shui/ShapeCatalog"], show_system_graphs=True
             ),
             default_value="https://vocab.eccenca.com/shacl/",
         ),
         PluginParameter(
+            name="result_graph",
+            label="Result Graph",
+            description="In this graph, the validation results are materialized. "
+            "If left empty, results are not materialized.",
+            param_type=GraphParameterType(
+                show_di_graphs=False,
+                show_graphs_without_class=True,
+                show_system_graphs=False,
+                allow_only_autocompleted_values=False,
+            ),
+        ),
+        PluginParameter(
+            name="clear_result_graph",
+            label="Clear Result Graph",
+            description="If enabled, the result graph will be cleared before validation.",
+        ),
+        PluginParameter(
             name="fail_on_violations",
             label="Fail on Violations",
-            description="...",
+            description="If enabled, found violations will lead to a workflow failure.",
         ),
     ],
 )
@@ -60,11 +79,18 @@ class ValidateGraph(WorkflowPlugin):
     """Validate resources in a graph"""
 
     def __init__(
-        self, context_graph: str, shape_graph: str, fail_on_violations: bool = True
+        self,
+        context_graph: str,
+        shape_graph: str,
+        result_graph: str,
+        clear_result_graph: bool,
+        fail_on_violations: bool = True,
     ) -> None:
         self.context_graph = context_graph
         self.shape_graph = shape_graph
+        self.result_graph = result_graph
         self.fail_on_violations = fail_on_violations
+        self.clear_result_graph = clear_result_graph
         self.input_ports = FixedNumberOfInputs([])
         self.output_port = None
 
@@ -76,9 +102,13 @@ class ValidateGraph(WorkflowPlugin):
         """Run the workflow operator."""
         self.log.info("Start validation task.")
         setup_cmempy_user_access(context=context.user)
+        if self.clear_result_graph:
+            graph_api.delete(graph=self.result_graph)
         try:
             process_id = validation.start(
-                context_graph=self.context_graph, shape_graph=self.shape_graph
+                context_graph=self.context_graph,
+                shape_graph=self.shape_graph,
+                result_graph=self.result_graph,
             )
         except HTTPError as error_message:
             context.report.update(
@@ -92,6 +122,17 @@ class ValidateGraph(WorkflowPlugin):
             sleep(1)
             setup_cmempy_user_access(context=context.user)
             state.refresh()
+            if context.workflow.status() != "Running":
+                validation.cancel(batch_id=process_id)
+                context.report.update(
+                    ExecutionReport(
+                        entity_count=state.completed,
+                        operation="read",
+                        operation_desc=f"/ {state.total} Resources validated (cancelled)",
+                    )
+                )
+                self.log.info("End validation task (Cancelled Workflow).")
+                return
             if state.status in (validation.STATUS_SCHEDULED, validation.STATUS_RUNNING):
                 # when reported as running or scheduled, start another loop
                 context.report.update(
