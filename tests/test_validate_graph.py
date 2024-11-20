@@ -69,7 +69,7 @@ def test_fails(test_setup: TestSetup) -> None:
 
 
 def test_output_results(test_setup: TestSetup) -> None:
-    """Test basic task execution with output results or not"""
+    """Test task execution with output results or not"""
     _ = test_setup
     task = ValidateGraph(
         context_graph=_.persons_graph, shape_graph=_.shapes_graph, output_results=False
@@ -90,7 +90,7 @@ def test_output_results(test_setup: TestSetup) -> None:
 
 
 def test_safe_as_graph(test_setup: TestSetup) -> None:
-    """Test basic task execution with result graph output and clearance"""
+    """Test task execution with result graph output and clearance"""
     _ = test_setup
     task = ValidateGraph(
         context_graph=_.persons_graph,
@@ -112,3 +112,29 @@ def test_safe_as_graph(test_setup: TestSetup) -> None:
     assert (
         _get_triple_count(_.result_graph) == result_graph_triples
     ), "result graph should have as single result sets again"
+
+
+def test_different_query(test_setup: TestSetup) -> None:
+    """Test task execution with different queries"""
+    _ = test_setup
+    task = ValidateGraph(
+        context_graph=_.persons_graph,
+        shape_graph=_.shapes_graph,
+        output_results=True,
+    )
+    result = task.execute(context=TestExecutionContext(), inputs=[])
+    assert isinstance(result, Entities)
+    assert len(list(result.entities)) == 1, "There should be a single violation entity"
+    query = """
+PREFIX di: <https://vocab.eccenca.com/di/>
+SELECT DISTINCT ?resource
+FROM <{{context_graph}}>
+WHERE {
+    ?resource a di:Dataset.
+    FILTER isIRI(?resource)
+}
+"""
+    task.sparql_query = query
+    assert (
+        task.execute(context=TestExecutionContext(), inputs=[]) is None
+    ), "Should no violations, since no person was validated"

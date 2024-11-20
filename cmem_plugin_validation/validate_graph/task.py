@@ -6,6 +6,7 @@ from time import sleep
 
 from cmem.cmempy.dp.proxy import graph as graph_api
 from cmem.cmempy.dp.shacl import validation
+from cmem.cmempy.queries import SparqlQuery
 from cmem_plugin_base.dataintegration.context import ExecutionContext, ExecutionReport
 from cmem_plugin_base.dataintegration.description import Icon, Plugin, PluginParameter
 from cmem_plugin_base.dataintegration.entity import (
@@ -13,6 +14,7 @@ from cmem_plugin_base.dataintegration.entity import (
     EntityPath,
     EntitySchema,
 )
+from cmem_plugin_base.dataintegration.parameter.code import SparqlCode
 from cmem_plugin_base.dataintegration.parameter.graph import GraphParameterType
 from cmem_plugin_base.dataintegration.plugins import WorkflowPlugin
 from cmem_plugin_base.dataintegration.ports import (
@@ -35,6 +37,10 @@ DEFAULT_RESULT_GRAPH = ""
 DEFAULT_CLEAR_RESULT_GRAPH = False
 DEFAULT_FAIL_ON_VIOLATION = False
 DEFAULT_OUTPUT_RESULTS = True
+DEFAULT_SPARQL_QUERY = """SELECT DISTINCT ?resource
+FROM <{{context_graph}}>
+WHERE { ?resource a ?class . FILTER isIRI(?resource) }
+"""
 
 
 @Plugin(
@@ -92,6 +98,14 @@ DEFAULT_OUTPUT_RESULTS = True
             label="Output violations as entities",
             default_value=DEFAULT_OUTPUT_RESULTS,
         ),
+        PluginParameter(
+            name="sparql_query",
+            label="Resource Selection Query",
+            description="The query to select the resources to validate. "
+            "Use {{context_graph}} as a placeholder for the select context graph for validation.",
+            default_value=DEFAULT_SPARQL_QUERY,
+            advanced=True,
+        ),
     ],
 )
 class ValidateGraph(WorkflowPlugin):
@@ -105,6 +119,7 @@ class ValidateGraph(WorkflowPlugin):
         clear_result_graph: bool = DEFAULT_CLEAR_RESULT_GRAPH,
         fail_on_violations: bool = DEFAULT_FAIL_ON_VIOLATION,
         output_results: bool = DEFAULT_OUTPUT_RESULTS,
+        sparql_query: SparqlCode = DEFAULT_SPARQL_QUERY,
     ) -> None:
         self.context_graph = context_graph
         self.shape_graph = shape_graph
@@ -117,6 +132,7 @@ class ValidateGraph(WorkflowPlugin):
             self.output_port = FixedSchemaPort(schema=self.output_schema)
         else:
             self.output_port = None
+        self.sparql_query = sparql_query
 
     @property
     def output_schema(self) -> EntitySchema:
@@ -143,11 +159,15 @@ class ValidateGraph(WorkflowPlugin):
         setup_cmempy_user_access(context=context.user)
         if self.clear_result_graph and self.result_graph:
             graph_api.delete(graph=self.result_graph)
+        query = SparqlQuery(text=self.sparql_query).get_filled_text(
+            placeholder={"context_graph": self.context_graph}
+        )
         try:
             process_id = validation.start(
                 context_graph=self.context_graph,
                 shape_graph=self.shape_graph,
                 result_graph=self.result_graph if self.result_graph else None,
+                query=query,
             )
         except HTTPError as error:
             context.report.update(

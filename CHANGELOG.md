@@ -8,8 +8,9 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/) and this p
 
 ### Added
 
+- flag to output violations as entities (fixed schema port)
+- advanced parameter to provide a custom resource selection query
 - custom icon
-- option to output violations as entities (fixed schema port)
 - proper task tests
 
 
