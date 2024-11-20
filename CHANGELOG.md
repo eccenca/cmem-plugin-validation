@@ -10,6 +10,7 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/) and this p
 
 - custom icon
 - option to output violations as entities (fixed schema port)
+- proper task tests
 
 
 ## [0.5.0] 2024-11-18

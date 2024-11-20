@@ -23,10 +23,10 @@ from cmem_plugin_base.dataintegration.utils import setup_cmempy_user_access
 from cmem_plugin_base.dataintegration.utils.entity_builder import build_entities_from_data
 from requests import HTTPError
 
-from cmem_plugin_validation.state import State
+from cmem_plugin_validation.validate_graph.state import State
 
 DOCUMENTATION = """
-A validation process verifies, that resources in a specific graph are valid according to
+A graph validation process verifies, that resources in a specific graph are valid according to
 the node shapes in a shape catalog graph.
 """
 
@@ -39,9 +39,9 @@ DEFAULT_OUTPUT_RESULTS = True
 
 @Plugin(
     label="Validate Knowledge Graph",
-    icon=Icon(file_name="logo.svg", package=__package__),
-    description="Validate resources in a context graph based on node and property"
-    " shapes from a Shape Catalog graph.",
+    plugin_id="cmem_plugin_validation-validate-ValidateGraph",
+    icon=Icon(file_name="icon.svg", package=__package__),
+    description="Use shapes to validate resources in a knowledge graph.",
     documentation=DOCUMENTATION,
     parameters=[
         PluginParameter(
@@ -128,9 +128,8 @@ class ValidateGraph(WorkflowPlugin):
                 EntityPath(path="focusNode", is_single_value=True),
                 EntityPath(path="source", is_single_value=True),
                 EntityPath(path="severity", is_single_value=True),
-                EntityPath(path="resourceIri", is_single_value=True),
-                EntityPath(path="nodeShapes", is_single_value=False),
-                EntityPath(path="constraintName", is_single_value=True),
+                EntityPath(path="messages", is_single_value=True),
+                EntityPath(path="reportEntryConstraintMessageTemplate", is_single_value=True),
             ],
         )
 
@@ -150,19 +149,19 @@ class ValidateGraph(WorkflowPlugin):
                 shape_graph=self.shape_graph,
                 result_graph=self.result_graph if self.result_graph else None,
             )
-        except HTTPError as error_message:
+        except HTTPError as error:
             context.report.update(
                 ExecutionReport(
-                    error=json.loads(error_message.response.text)["detail"],
+                    error=json.loads(error.response.text)["detail"],
                 )
             )
-            return None
+            raise RuntimeError(json.loads(error.response.text)["detail"]) from error
         state = State(id_=process_id)
         while True:
             sleep(1)
             setup_cmempy_user_access(context=context.user)
             state.refresh()
-            if context.workflow.status() != "Running":
+            if context.workflow and context.workflow.status() != "Running":
                 validation.cancel(batch_id=process_id)
                 context.report.update(
                     ExecutionReport(
@@ -207,9 +206,9 @@ class ValidateGraph(WorkflowPlugin):
 
         violations = []
         for result in list(validation.get(batch_id=process_id)["results"]):
+            resource_iri = result.get("resourceIri")
             for _ in result["violations"]:
                 violation = dict(_)
-                violation.pop("messages", None)
-                violation.pop("reportEntryConstraintMessageTemplate", None)
+                violation["resourceIri"] = resource_iri
                 violations.append(violation)
         return build_entities_from_data(data=violations)
