@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/) and this p
 
 ## [Unreleased]
 
+...
+
+
+## [1.0.1] 2024-11-25
+
+### Fixed
+
+- allow for selecting system graphs (e.g. custom shape catalogs) for validation
+
+
+## [1.0.0] 2024-11-20
+
 ### Added
 
 - flag to output violations as entities (fixed schema port)
