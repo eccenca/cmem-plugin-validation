@@ -1,7 +1,6 @@
 """Entities validation workflow task"""
 
 from collections.abc import Sequence
-
 from cmem_plugin_base.dataintegration.context import ExecutionContext
 from cmem_plugin_base.dataintegration.description import Plugin, PluginParameter
 from cmem_plugin_base.dataintegration.entity import Entities
@@ -18,6 +17,12 @@ DEFAULT_FAIL_ON_VIOLATION = False
     documentation="Sai",
     parameters=[
         PluginParameter(
+            name="json_dataset",
+            label="JSON Dataset",
+            description="This dataset  holds the resources you want to validate.",
+            param_type=DatasetParameterType(dataset_type="json"),
+        ),
+        PluginParameter(
             name="json_schema_dataset",
             label="JSON Schema Dataset",
             description="This dataset  holds the resources you want to validate.",
@@ -33,7 +38,8 @@ DEFAULT_FAIL_ON_VIOLATION = False
 class ValidateEntity(WorkflowPlugin):
     """Validate entities against a JSON schema"""
 
-    def __init__(self, json_schema_dataset: str, fail_on_violations: bool):
+    def __init__(self, json_dataset:str,json_schema_dataset: str, fail_on_violations: bool):
+        self.json_dataset = json_dataset
         self.json_schema_dataset = json_schema_dataset
         self.fail_on_violations = fail_on_violations
 
