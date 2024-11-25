@@ -9,6 +9,13 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/) and this p
 ...
 
 
+## [1.0.2] 2024-11-25
+
+### Fixed
+
+- correct transformation of SPARQL code to string
+
+
 ## [1.0.1] 2024-11-25
 
 ### Fixed

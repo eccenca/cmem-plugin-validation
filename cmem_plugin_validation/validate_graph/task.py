@@ -132,7 +132,7 @@ class ValidateGraph(WorkflowPlugin):
             self.output_port = FixedSchemaPort(schema=self.output_schema)
         else:
             self.output_port = None
-        self.sparql_query = sparql_query
+        self.sparql_query = str(sparql_query)
 
     @property
     def output_schema(self) -> EntitySchema:
