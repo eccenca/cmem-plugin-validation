@@ -79,7 +79,7 @@ WHERE { ?resource a ?class . FILTER isIRI(?resource) }
             param_type=GraphParameterType(
                 show_di_graphs=False,
                 show_graphs_without_class=True,
-                show_system_graphs=False,
+                show_system_graphs=True,
                 allow_only_autocompleted_values=False,
             ),
         ),
