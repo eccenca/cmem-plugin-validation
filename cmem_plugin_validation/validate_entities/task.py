@@ -35,8 +35,11 @@ from jsonschema.exceptions import ValidationError
 
 from cmem_plugin_validation.validate_entities import state
 
-DEFAULT_FAIL_ON_VIOLATION = False
+DOCUMENTATION = """
+The JSON Entity Validation Plugin ensures that JSON objects conform to schema standards, validating structure and content for data integrity before processing.
+"""
 
+DEFAULT_FAIL_ON_VIOLATION = False
 
 def get_task_metadata(project: str, task: str, context: UserContext) -> dict:
     """Get metadata information of a task"""
@@ -73,7 +76,7 @@ TARGET.options = OrderedDict(
     label="Validate Entity",
     plugin_id="cmem_plugin_validation-validate-ValidateEntity",
     description="Use JSON schema to validate entities/JSON Dataset",
-    documentation="Sai",
+    documentation=DOCUMENTATION,
     parameters=[
         PluginParameter(
             name="source_mode",
@@ -127,6 +130,9 @@ class ValidateEntity(WorkflowPlugin):
     source_dataset: str
     target_dataset: str
 
+    inputs: Sequence[Entities]
+    execution_context: ExecutionContext
+
     def __init__(  #  noqa: PLR0913
         self,
         source_mode: str,
@@ -157,10 +163,27 @@ class ValidateEntity(WorkflowPlugin):
                 f"When using the source mode '{SOURCE.file}', "
                 "you need to select a Source JSON Dataset."
             )
+        if self.source_mode == SOURCE.entities and self.source_dataset != "":
+            self._raise_error(
+                f"When using the source mode '{SOURCE.entities}', "
+                "you don't need to select a Source JSON Dataset."
+            )
+        if self.source_mode == SOURCE.entities:
+            if hasattr(self, "execution_context") and not self.inputs:
+                self._raise_error(
+                    f"When using the source mode '{SOURCE.entities}', "
+                    "you need to pass entities to input port."
+                )
+
         if self.target_mode == TARGET.dataset and self.target_dataset == "":
             self._raise_error(
                 f"When using the target mode '{TARGET.dataset}', "
                 "you need to select a Target JSON dataset."
+            )
+        if self.target_mode == SOURCE.entities and self.target_dataset != "":
+            self._raise_error(
+                f"When using the source mode '{TARGET.entities}', "
+                "you don't need to select a Target JSON Dataset."
             )
 
     def _set_ports(self) -> None:
@@ -189,6 +212,9 @@ class ValidateEntity(WorkflowPlugin):
         context: ExecutionContext,
     ) -> Entities | None:
         """Run the workflow operator."""
+        self.execution_context = context
+        self.inputs = inputs
+        self._validate_config()
         json_data_set_schema = self._get_json_dataset_content(context, self.json_schema_dataset)
         valid_json_objects = []
         if self.source_mode == SOURCE.entities:
