@@ -218,7 +218,7 @@ class ValidateGraph(WorkflowPlugin):
                 operation_desc=f"/ {state.total} Resources have violations",
                 summary=summary,
                 error=validation_message if self.fail_on_violations else None,
-                warnings=[validation_message] if not self.fail_on_violations else None,
+                warnings=[validation_message] if not self.fail_on_violations else [],
             )
         )
         if not self.output_results:
