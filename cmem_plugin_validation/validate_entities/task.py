@@ -244,7 +244,7 @@ class ValidateEntity(WorkflowPlugin):
             self._state.increment_total()
             validate(instance=json, schema=schema)
         except ValidationError as e:
-            self._state.add_violations_message(e.message)
+            self._state.add_violations_message(f"{e.json_path}: {e.message}")
             return False
         return True
 
