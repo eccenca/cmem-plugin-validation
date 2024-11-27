@@ -221,7 +221,7 @@ class ValidateEntity(WorkflowPlugin):
             valid_json_objects += [
                 _j
                 for _j in self._convert_entities_to_json(inputs, {}, "")
-                if self._validate_json(_j, json_data_set_schema)  # type: ignore[arg-type]
+                if _j and self._validate_json(_j, json_data_set_schema)  # type: ignore[arg-type]
             ]
 
         else:
@@ -325,3 +325,4 @@ class ValidateEntity(WorkflowPlugin):
                         json_obj[schema_path.path] = value
 
                 yield json_obj
+        yield {}
