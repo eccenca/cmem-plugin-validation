@@ -220,7 +220,7 @@ class ValidateEntity(WorkflowPlugin):
             ExecutionReport(
                 entity_count=_state.total,
                 operation="read",
-                operation_desc=" entities validated",
+                operation_desc=f"entities validate ({_state.violations} failed)",
                 summary=summary,
                 error=validation_message if self.fail_on_violations else None,
                 warnings=[validation_message]
