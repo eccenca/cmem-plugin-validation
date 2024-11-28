@@ -2,7 +2,7 @@
 name = "cmem-plugin-validation"
 version = "0.0.0"
 license = "Apache-2.0"
-description = "Start and control graph validation processes."
+description = "Validate graph and data structures."
 authors = ["eccenca GmbH <cmempy-developer@eccenca.com>"]
 classifiers = [
     "Development Status :: 4 - Beta","Environment :: Plugins",

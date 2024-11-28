@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/) and this p
 
 ...
 
+## [1.1.1] 2024-11-28
+
+### Changed
+
+- hookline
+- dependency updates
+
 
 ## [1.1.0] 2024-11-28
 

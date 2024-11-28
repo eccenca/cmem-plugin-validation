@@ -4,7 +4,7 @@ _src_path: gh:eccenca/cmem-plugin-template
 author_mail: cmempy-developer@eccenca.com
 author_name: eccenca GmbH
 github_page: https://github.com/eccenca/cmem-plugin-validation
-project_description: Start and control graph validation processes.
+project_description: Validate graph and data structures.
 project_slug: validation
 project_type: plugin
 pypi: true

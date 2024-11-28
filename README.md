@@ -1,6 +1,6 @@
 # cmem-plugin-validation
 
-Start and control graph validation processes.
+Validate graph and data structures.
 
 [![eccenca Corporate Memory][cmem-shield]][cmem-link][![workflow](https://github.com/eccenca/cmem-plugin-validation/actions/workflows/check.yml/badge.svg)](https://github.com/eccenca/cmem-plugin-validation/actions) [![pypi version](https://img.shields.io/pypi/v/cmem-plugin-validation)](https://pypi.org/project/cmem-plugin-validation) [![license](https://img.shields.io/pypi/l/cmem-plugin-validation)](https://pypi.org/project/cmem-plugin-validation)
 [![poetry][poetry-shield]][poetry-link] [![ruff][ruff-shield]][ruff-link] [![mypy][mypy-shield]][mypy-link] [![copier][copier-shield]][copier] 

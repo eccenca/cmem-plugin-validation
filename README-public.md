@@ -1,6 +1,6 @@
 # cmem-plugin-validation
 
-Start and control graph validation processes.
+Validate graph and data structures.
 
 [![eccenca Corporate Memory][cmem-shield]][cmem-link]
 
