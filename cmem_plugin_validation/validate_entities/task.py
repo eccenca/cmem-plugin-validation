@@ -14,7 +14,7 @@ from cmem_plugin_base.dataintegration.context import (
     ExecutionReport,
     UserContext,
 )
-from cmem_plugin_base.dataintegration.description import Plugin, PluginParameter
+from cmem_plugin_base.dataintegration.description import Icon, Plugin, PluginParameter
 from cmem_plugin_base.dataintegration.entity import Entities
 from cmem_plugin_base.dataintegration.parameter.choice import ChoiceParameterType
 from cmem_plugin_base.dataintegration.parameter.dataset import DatasetParameterType
@@ -35,11 +35,24 @@ from jsonschema.exceptions import ValidationError
 
 from cmem_plugin_validation.validate_entities import state
 
-DOCUMENTATION = """
-The JSON Entity Validation Plugin ensures that JSON objects conform to schema standards, validating structure and content for data integrity before processing.
+DOCUMENTATION = """[JSON Schema](https://json-schema.org/) specifies a JSON-based format to
+define the structure of JSON data for validation, documentation, and interaction control.
+It provides a contract for the JSON data required by a given application.
+
+This workflow task can validate incoming entities or a stand-alone JSON dataset by using a
+JSON Schema specification.
+
+The used JSON Schema needs to be provided as a JSON Dataset in the project.
+
+Validated data objects can be send to an output port, to further process them in the workflow,
+or saved in a JSON dataset in the project.
+
+The task can either fail instantly if there is a data violation, or just provide warning in the
+workflow report and allow to run follow-up tasks based on the data which was validated.
 """
 
 DEFAULT_FAIL_ON_VIOLATION = False
+
 
 def get_task_metadata(project: str, task: str, context: UserContext) -> dict:
     """Get metadata information of a task"""
@@ -53,9 +66,9 @@ SOURCE.file = "dataset"
 SOURCE.options = OrderedDict(
     {
         SOURCE.entities: f"{SOURCE.entities}: "
-        "Validate content from the input port in a workflow.",
+        "Validate entities received from the input port in the workflow.",
         SOURCE.file: f"{SOURCE.file}: "
-        "Validate content from a project dataset (see advanced options).",
+        "Validate a JSON Dataset from a project (see advanced options).",
     }
 )
 
@@ -73,9 +86,10 @@ TARGET.options = OrderedDict(
 
 
 @Plugin(
-    label="Validate Entity",
-    plugin_id="cmem_plugin_validation-validate-ValidateEntity",
-    description="Use JSON schema to validate entities/JSON Dataset",
+    label="Validate Entities",
+    plugin_id="cmem_plugin_validation-validate-ValidateEntities",
+    icon=Icon(file_name="icon.svg", package=__package__),
+    description="Use a JSON schema to validate entities or a JSON dataset.",
     documentation=DOCUMENTATION,
     parameters=[
         PluginParameter(
@@ -117,7 +131,8 @@ TARGET.options = OrderedDict(
         ),
         PluginParameter(
             name="fail_on_violations",
-            label="Fail workflow on violations",
+            label="Fail on violations",
+            description="If enabled, the task will fail on the first data violation.",
             default_value=DEFAULT_FAIL_ON_VIOLATION,
         ),
     ],
@@ -168,12 +183,15 @@ class ValidateEntity(WorkflowPlugin):
                 f"When using the source mode '{SOURCE.entities}', "
                 "you don't need to select a Source JSON Dataset."
             )
-        if self.source_mode == SOURCE.entities:
-            if hasattr(self, "execution_context") and not self.inputs:
-                self._raise_error(
-                    f"When using the source mode '{SOURCE.entities}', "
-                    "you need to pass entities to input port."
-                )
+        if (
+            self.source_mode == SOURCE.entities
+            and hasattr(self, "execution_context")
+            and not self.inputs
+        ):
+            self._raise_error(
+                f"When using the source mode '{SOURCE.entities}', "
+                "you need to pass entities to input port."
+            )
 
         if self.target_mode == TARGET.dataset and self.target_dataset == "":
             self._raise_error(
