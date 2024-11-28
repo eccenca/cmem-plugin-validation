@@ -28,8 +28,8 @@ from requests import HTTPError
 from cmem_plugin_validation.validate_graph.state import State
 
 DOCUMENTATION = """
-A graph validation process verifies, that resources in a specific graph are valid according to
-the node shapes in a shape catalog graph.
+Start a graph validation process which verifies, that resources in a specific graph are valid
+according to the node shapes in a shape catalog graph.
 """
 
 DEFAULT_SHAPE_GRAPH = "https://vocab.eccenca.com/shacl/"
@@ -47,7 +47,7 @@ WHERE { ?resource a ?class . FILTER isIRI(?resource) }
     label="Validate Knowledge Graph",
     plugin_id="cmem_plugin_validation-validate-ValidateGraph",
     icon=Icon(file_name="icon.svg", package=__package__),
-    description="Use shapes to validate resources in a knowledge graph.",
+    description="Use SHACL shapes to validate resources in a Knowledge Graph.",
     documentation=DOCUMENTATION,
     parameters=[
         PluginParameter(
@@ -218,7 +218,7 @@ class ValidateGraph(WorkflowPlugin):
                 operation_desc=f"/ {state.total} Resources have violations",
                 summary=summary,
                 error=validation_message if self.fail_on_violations else None,
-                warnings=[validation_message] if not self.fail_on_violations else None,
+                warnings=[validation_message] if not self.fail_on_violations else [],
             )
         )
         if not self.output_results:
