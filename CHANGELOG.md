@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/) and this p
 
 ## [Unreleased]
 
+...
+
+
+## [1.1.0] 2024-11-28
+
 ### Added
 
 - Task to validate entities or JSON datasets with a JSON Schema
