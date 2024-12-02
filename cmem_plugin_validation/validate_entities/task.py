@@ -62,12 +62,12 @@ def get_task_metadata(project: str, task: str, context: UserContext) -> dict:
 
 SOURCE = SimpleNamespace()
 SOURCE.entities = "entities"
-SOURCE.file = "dataset"
+SOURCE.dataset = "dataset"
 SOURCE.options = OrderedDict(
     {
         SOURCE.entities: f"{SOURCE.entities}: "
         "Validate entities received from the input port in the workflow.",
-        SOURCE.file: f"{SOURCE.file}: "
+        SOURCE.dataset: f"{SOURCE.dataset}: "
         "Validate a JSON Dataset from a project (see advanced options).",
     }
 )
@@ -173,9 +173,9 @@ class ValidateEntity(WorkflowPlugin):
 
     def _validate_config(self) -> None:
         """Raise value errors on bad configurations"""
-        if self.source_mode == SOURCE.file and self.source_dataset == "":
+        if self.source_mode == SOURCE.dataset and self.source_dataset == "":
             self._raise_error(
-                f"When using the source mode '{SOURCE.file}', "
+                f"When using the source mode '{SOURCE.dataset}', "
                 "you need to select a Source JSON Dataset."
             )
         if self.source_mode == SOURCE.entities and self.source_dataset != "":
@@ -207,7 +207,7 @@ class ValidateEntity(WorkflowPlugin):
     def _set_ports(self) -> None:
         """Define input/output ports based on the configuration"""
         match self.source_mode:
-            case SOURCE.file:
+            case SOURCE.dataset:
                 # no input port
                 self.input_ports = FixedNumberOfInputs([])
             case SOURCE.entities:
