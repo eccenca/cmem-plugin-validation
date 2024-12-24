@@ -4,9 +4,11 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/) and this project adheres to [Semantic Versioning](https://semver.org/)
 
-## [Unreleased]
+## [1.1.2] 2024-12-24
 
-...
+### Changed
+
+- update `Validate Entities` plugin documentation
 
 ## [1.1.1] 2024-11-28
 
