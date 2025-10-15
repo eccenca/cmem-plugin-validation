@@ -3,16 +3,17 @@
 import json
 from collections.abc import Generator
 from dataclasses import dataclass
+from os import environ
 from pathlib import Path
 
 import pytest
 from cmem.cmempy.workspace.projects.datasets.dataset import make_new_dataset
 from cmem.cmempy.workspace.projects.project import delete_project, make_new_project
 from cmem.cmempy.workspace.projects.resources.resource import create_resource, get_resource_response
+from cmem_plugin_base.testing import TestExecutionContext
 
 from cmem_plugin_validation.validate_entities.task import SOURCE, TARGET, ValidateEntity
 from tests.fixtures import FIXTURE_DIR
-from tests.utils import TestExecutionContext, needs_cmem
 
 
 @dataclass
@@ -68,13 +69,18 @@ def project() -> Generator[TestSetup, None, None]:
     delete_project(_.project_name)
 
 
+needs_cmem = pytest.mark.skipif(
+    environ.get("CMEM_BASE_URI", "") == "", reason="Needs CMEM configuration"
+)
+
+
 @needs_cmem
 def test_configuration(project: TestSetup) -> None:
     """Test configuration setup"""
     _ = project
     with pytest.raises(
         ValueError,
-        match="When using the source mode 'dataset', you need to select a Source JSON Dataset.",
+        match=r"When using the source mode 'dataset', you need to select a Source JSON Dataset.",
     ):
         ValidateEntity(
             source_mode=SOURCE.dataset,
@@ -84,7 +90,7 @@ def test_configuration(project: TestSetup) -> None:
         )
     with pytest.raises(
         ValueError,
-        match="When using the target mode 'dataset', you need to select a Target JSON dataset.",
+        match=r"When using the target mode 'dataset', you need to select a Target JSON dataset.",
     ):
         ValidateEntity(
             source_mode=SOURCE.entities,
