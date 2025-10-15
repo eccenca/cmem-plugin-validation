@@ -9,10 +9,11 @@ from typing import Any
 import cmem.cmempy.dp.proxy.graph as graph_api
 import pytest
 from cmem_plugin_base.dataintegration.entity import Entities
+from cmem_plugin_base.testing import TestExecutionContext
+from requests import HTTPError, codes
 
 from cmem_plugin_validation.validate_graph.task import ValidateGraph
 from tests.fixtures import FIXTURE_DIR
-from tests.utils import TestExecutionContext
 
 
 def _get_triple_count(graph: str) -> int:
@@ -42,12 +43,19 @@ def test_setup() -> Generator[TestSetup, Any, None]:
     _ = TestSetup()
     graph_api.post_streamed(replace=True, file=_.persons_file, graph=_.persons_graph)
     graph_api.post_streamed(replace=True, file=_.shapes_file, graph=_.shapes_graph)
-    graph_api.delete(graph=_.result_graph)
+    try:
+        graph_api.delete(graph=_.result_graph)
+    except HTTPError as error:
+        if error.response.status_code != codes.not_found:
+            raise HTTPError from error
     yield _
     # purge setup
-    graph_api.delete(graph=_.persons_graph)
-    graph_api.delete(graph=_.shapes_graph)
-    graph_api.delete(graph=_.result_graph)
+    for graph in [_.persons_graph, _.shapes_graph, _.result_graph]:
+        try:
+            graph_api.delete(graph=graph)
+        except HTTPError as error:
+            if error.response.status_code != codes.not_found:
+                raise HTTPError from error
 
 
 def test_fails(test_setup: TestSetup) -> None:
@@ -84,9 +92,9 @@ def test_output_results(test_setup: TestSetup) -> None:
     assert isinstance(result, Entities)
     entities = list(result.entities)
     assert len(entities) == 1, "There should be a single violation entity"
-    assert entities[0].values[1] == [
-        "http://example.org/persons/2"
-    ], "focus node of the only violation should be person 2"
+    assert entities[0].values[1] == ["http://example.org/persons/2"], (
+        "focus node of the only violation should be person 2"
+    )
 
 
 def test_safe_as_graph(test_setup: TestSetup) -> None:
@@ -104,14 +112,14 @@ def test_safe_as_graph(test_setup: TestSetup) -> None:
     result_graph_triples = _get_triple_count(_.result_graph)
     assert result_graph_triples > 0, "result graph should be empty"
     task.execute(context=TestExecutionContext(), inputs=[])
-    assert (
-        _get_triple_count(_.result_graph) == result_graph_triples * 2
-    ), "result graph should have two equal result sets"
+    assert _get_triple_count(_.result_graph) == result_graph_triples * 2, (
+        "result graph should have two equal result sets"
+    )
     task.clear_result_graph = True
     task.execute(context=TestExecutionContext(), inputs=[])
-    assert (
-        _get_triple_count(_.result_graph) == result_graph_triples
-    ), "result graph should have as single result sets again"
+    assert _get_triple_count(_.result_graph) == result_graph_triples, (
+        "result graph should have as single result sets again"
+    )
 
 
 def test_different_query(test_setup: TestSetup) -> None:
@@ -135,6 +143,6 @@ WHERE {
 }
 """
     task.sparql_query = query
-    assert (
-        task.execute(context=TestExecutionContext(), inputs=[]) is None
-    ), "Should no violations, since no person was validated"
+    assert task.execute(context=TestExecutionContext(), inputs=[]) is None, (
+        "Should no violations, since no person was validated"
+    )
