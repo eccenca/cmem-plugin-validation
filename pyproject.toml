@@ -25,8 +25,8 @@ cmem-cmempy = ">=25.3.0"
 requests = ">=2.0.1"
 
 [tool.poetry.dependencies.cmem-plugin-base]
-version = "^4.19.0rc1"
-allow-prereleases = true
+version = "^4.19.0"
+allow-prereleases = false
 
 [tool.poetry.group.dev.dependencies.cmem-cmemc]
 version = ">=24.2.0"
