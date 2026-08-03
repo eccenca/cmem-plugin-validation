@@ -51,7 +51,7 @@ def _make_dataset(project_name: str, dataset_name: str, dataset_file_name: Path)
 
 
 @pytest.fixture
-def project() -> Generator[TestSetup, None, None]:
+def project() -> Generator[TestSetup]:
     """Provide the DI build project incl. assets."""
     _ = TestSetup()
     make_new_project(_.project_name)

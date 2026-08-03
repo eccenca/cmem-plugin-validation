@@ -328,7 +328,7 @@ class ValidateEntity(WorkflowPlugin):
 
     def _convert_entities_to_json(
         self, inputs: Sequence[Entities], path_to_entities: dict[str, Entities], path: str = ""
-    ) -> Generator[dict[str, Any], None, None]:
+    ) -> Generator[dict[str, Any]]:
         """Convert a sequence of Entities into JSON-like dictionaries using recursive traversal."""
         for entities in inputs:
             # Initialize path-to-entities map for the root level
