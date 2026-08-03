@@ -166,7 +166,7 @@ class ValidateGraph(WorkflowPlugin):
             process_id = validation.start(
                 context_graph=self.context_graph,
                 shape_graph=self.shape_graph,
-                result_graph=self.result_graph if self.result_graph else None,
+                result_graph=self.result_graph or None,
                 query=query,
             )
         except HTTPError as error:
