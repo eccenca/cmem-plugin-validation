@@ -158,7 +158,7 @@ class ValidateEntity(WorkflowPlugin):
     inputs: Sequence[Entities]
     execution_context: ExecutionContext
 
-    def __init__(  #  noqa: PLR0913
+    def __init__(  #  noqa: PLR0913 PLR0917
         self,
         source_mode: str,
         target_mode: str,

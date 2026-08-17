@@ -110,7 +110,7 @@ WHERE { ?resource a ?class . FILTER isIRI(?resource) }
 class ValidateGraph(WorkflowPlugin):
     """Validate resources in a graph"""
 
-    def __init__(  # noqa: PLR0913
+    def __init__(  # noqa: PLR0913 PLR0917
         self,
         context_graph: str,
         shape_graph: str = DEFAULT_SHAPE_GRAPH,
@@ -219,10 +219,11 @@ class ValidateGraph(WorkflowPlugin):
         if not self.output_results:
             return None
 
-        violations = []
-        for result in client.validations.get_result(batch_id=process_id).results:
-            for _ in result.violations:
-                violations.append(self._as_violation_data(_, resource_iri=result.resource_iri))
+        violations = [
+            self._as_violation_data(violation, resource_iri=result.resource_iri)
+            for result in client.validations.get_result(batch_id=process_id).results
+            for violation in result.violations
+        ]
         return build_entities_from_data(data=violations)
 
     def _as_violation_data(self, violation: ValidationViolation, resource_iri: str) -> dict:
@@ -232,6 +233,8 @@ class ValidateGraph(WorkflowPlugin):
         dicts, so the keys of the output schema come first, followed by any additional key
         the API delivers and the IRI of the validated resource.
         """
-        data = violation.model_dump(by_alias=True, exclude_none=True)
-        ordered = {_.path: data.pop(_.path) for _ in self.output_schema.paths if _.path in data}
+        data: dict = violation.model_dump(by_alias=True, exclude_none=True)
+        ordered: dict = {
+            _.path: data.pop(_.path) for _ in self.output_schema.paths if _.path in data
+        }
         return ordered | data | {"resourceIri": resource_iri}
