@@ -16,11 +16,11 @@ homepage = "https://github.com/eccenca/cmem-plugin-validation"
 [tool.poetry.dependencies]# if you need to change python version here, change it also in .python-version
 python = "^3.13"
 jsonschema = "^4.25.1"
-cmem-cmempy = ">=25.3.0"
-requests = ">=2.0.1"
+cmem-client = "^1.0.0"
+httpx = "^0.27.0"
 
 [tool.poetry.dependencies.cmem-plugin-base]
-version = "^4.15.0"
+version = "^4.19.0"
 allow-prereleases = false
 
 [tool.poetry.group.dev.dependencies.cmem-cmemc]
@@ -38,7 +38,6 @@ pytest-html = "^4.1.1"
 pytest-memray = { version = "^1.8.0",  markers = "platform_system != 'Windows'" }
 ruff = "^0.13.3"
 safety = "^1.10.3"
-types-requests = "^2.31.0.20240406"
 
 [build-system]
 requires = ["poetry-core>=1.0.0", "poetry-dynamic-versioning"]

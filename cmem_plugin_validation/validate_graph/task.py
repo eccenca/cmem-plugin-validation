@@ -4,9 +4,9 @@ import json
 from collections.abc import Sequence
 from time import sleep
 
-from cmem.cmempy.dp.proxy import graph as graph_api
-from cmem.cmempy.dp.shacl import validation
-from cmem.cmempy.queries import SparqlQuery
+from cmem_client.client import Client
+from cmem_client.models.query_catalog import Query
+from cmem_client.models.validation import STATUS_RUNNING, STATUS_SCHEDULED, ValidationViolation
 from cmem_plugin_base.dataintegration.context import ExecutionContext, ExecutionReport
 from cmem_plugin_base.dataintegration.description import Icon, Plugin, PluginParameter
 from cmem_plugin_base.dataintegration.entity import (
@@ -21,9 +21,8 @@ from cmem_plugin_base.dataintegration.ports import (
     FixedNumberOfInputs,
     FixedSchemaPort,
 )
-from cmem_plugin_base.dataintegration.utils import setup_cmempy_user_access
 from cmem_plugin_base.dataintegration.utils.entity_builder import build_entities_from_data
-from requests import HTTPError
+from httpx import HTTPStatusError
 
 from cmem_plugin_validation.validate_graph.state import State
 
@@ -156,33 +155,29 @@ class ValidateGraph(WorkflowPlugin):
     ) -> Entities | None:
         """Run the workflow operator."""
         self.log.info("Start validation task.")
-        setup_cmempy_user_access(context=context.user)
+        client = Client.from_context(context=context)
         if self.clear_result_graph and self.result_graph:
-            graph_api.delete(graph=self.result_graph)
-        query = SparqlQuery(text=self.sparql_query).get_filled_text(
-            placeholder={"context_graph": self.context_graph}
+            client.graphs.delete_item(key=self.result_graph, skip_if_missing=True)
+        query = Query(text=self.sparql_query).fill_placeholders(
+            placeholders={"context_graph": self.context_graph}
         )
         try:
-            process_id = validation.start(
+            process_id = client.validations.start(
                 context_graph=self.context_graph,
                 shape_graph=self.shape_graph,
                 result_graph=self.result_graph if self.result_graph else None,
                 query=query,
             )
-        except HTTPError as error:
-            context.report.update(
-                ExecutionReport(
-                    error=json.loads(error.response.text)["detail"],
-                )
-            )
-            raise RuntimeError(json.loads(error.response.text)["detail"]) from error
-        state = State(id_=process_id)
+        except HTTPStatusError as error:
+            detail = json.loads(error.response.text)["detail"]
+            context.report.update(ExecutionReport(error=detail))
+            raise RuntimeError(detail) from error
+        state = State(client=client, id_=process_id)
         while True:
             sleep(1)
-            setup_cmempy_user_access(context=context.user)
             state.refresh()
             if context.workflow and context.workflow.status() != "Running":
-                validation.cancel(batch_id=process_id)
+                client.validations.cancel(batch_id=process_id)
                 context.report.update(
                     ExecutionReport(
                         entity_count=state.completed,
@@ -192,7 +187,7 @@ class ValidateGraph(WorkflowPlugin):
                 )
                 self.log.info("End validation task (Cancelled Workflow).")
                 return None
-            if state.status in (validation.STATUS_SCHEDULED, validation.STATUS_RUNNING):
+            if state.status in (STATUS_SCHEDULED, STATUS_RUNNING):
                 # when reported as running or scheduled, start another loop
                 context.report.update(
                     ExecutionReport(
@@ -225,10 +220,18 @@ class ValidateGraph(WorkflowPlugin):
             return None
 
         violations = []
-        for result in list(validation.get(batch_id=process_id)["results"]):
-            resource_iri = result.get("resourceIri")
-            for _ in result["violations"]:
-                violation = dict(_)
-                violation["resourceIri"] = resource_iri
-                violations.append(violation)
+        for result in client.validations.get_result(batch_id=process_id).results:
+            for _ in result.violations:
+                violations.append(self._as_violation_data(_, resource_iri=result.resource_iri))
         return build_entities_from_data(data=violations)
+
+    def _as_violation_data(self, violation: ValidationViolation, resource_iri: str) -> dict:
+        """Turn a violation into a plain dict ordered like the output schema
+
+        The entity paths of the returned entities are derived from the key order of these
+        dicts, so the keys of the output schema come first, followed by any additional key
+        the API delivers and the IRI of the validated resource.
+        """
+        data = violation.model_dump(by_alias=True, exclude_none=True)
+        ordered = {_.path: data.pop(_.path) for _ in self.output_schema.paths if _.path in data}
+        return ordered | data | {"resourceIri": resource_iri}
