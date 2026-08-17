@@ -46,7 +46,7 @@ def _make_dataset(client: Client, project_name: str, dataset_name: str, file_nam
 
 
 @pytest.fixture
-def project() -> Generator[TestSetup, None, None]:
+def project() -> Generator[TestSetup]:
     """Provide the DI build project incl. assets."""
     _ = TestSetup()
     client = Client.from_context(context=TestExecutionContext(project_id=_.project_name))

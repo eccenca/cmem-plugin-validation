@@ -53,7 +53,7 @@ def _delete_graph(client: Client, graph: str) -> None:
 
 
 @pytest.fixture
-def test_setup() -> Generator[TestSetup, Any, None]:
+def test_setup() -> Generator[TestSetup, Any]:
     """Provide Test Setup"""
     if environ.get("CMEM_BASE_URI", "") == "":
         pytest.skip("Needs CMEM configuration")
