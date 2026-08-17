@@ -33,6 +33,16 @@ class TestSetup:
     valid_source_object_count = 2
 
 
+def get_client(project_name: str) -> Client:
+    """Get a fresh client
+
+    Clients are created per operation on purpose: a client keeps its HTTP connections
+    alive in a pool, and a connection which idles while a test runs is closed by the
+    server before it is used again.
+    """
+    return Client.from_context(context=TestExecutionContext(project_id=project_name))
+
+
 def _make_dataset(client: Client, project_name: str, dataset_name: str, file_name: str) -> None:
     """Create a new JSON dataset in a project"""
     client.datasets.create_item(
@@ -49,7 +59,7 @@ def _make_dataset(client: Client, project_name: str, dataset_name: str, file_nam
 def project() -> Generator[TestSetup]:
     """Provide the DI build project incl. assets."""
     _ = TestSetup()
-    client = Client.from_context(context=TestExecutionContext(project_id=_.project_name))
+    client = get_client(_.project_name)
     client.projects.create_item(Project(name=_.project_name))
     _make_dataset(client, _.project_name, _.target_dataset, _.target_dataset_file)
     for dataset_name, dataset_file in (
@@ -64,7 +74,7 @@ def project() -> Generator[TestSetup]:
             on_conflict=ImportConflictPolicy.REPLACE,
         )
     yield _
-    client.projects.delete_item(_.project_name)
+    get_client(_.project_name).projects.delete_item(_.project_name)
 
 
 needs_cmem = pytest.mark.skipif(
@@ -138,6 +148,6 @@ def validate_test_source_target_dataset(project: TestSetup) -> None:
         target_dataset=_.target_dataset,
     ).execute([], TestExecutionContext(project_id=_.project_name))
 
-    client = Client.from_context(context=TestExecutionContext(project_id=_.project_name))
+    client = get_client(_.project_name)
     data = json.loads(client.files.read(f"{_.project_name}:{_.target_dataset_file}"))
     assert len(data) == _.valid_source_object_count

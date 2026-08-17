@@ -21,9 +21,19 @@ from tests.fixtures import FIXTURE_DIR
 N_TRIPLES = GraphExportConfig(serialization=GraphsRepository.formats["n-triples"])
 
 
-def _get_triple_count(client: Client, graph: str) -> int:
+def get_client() -> Client:
+    """Get a fresh client
+
+    Clients are created per operation on purpose: a client keeps its HTTP connections
+    alive in a pool, and a connection which idles while a validation process runs is
+    closed by the server before it is used again.
+    """
+    return Client.from_context(context=TestExecutionContext())
+
+
+def _get_triple_count(graph: str) -> int:
     """Export a graph as n-triples and count the lines"""
-    client.graphs.fetch_data()
+    client = get_client()
     if graph not in client.graphs:
         return 0
     with TemporaryDirectory() as temp_dir:
@@ -32,11 +42,17 @@ def _get_triple_count(client: Client, graph: str) -> int:
         return len(path.read_text(encoding="utf-8").splitlines())
 
 
+def _delete_graphs(*graphs: str) -> None:
+    """Delete graphs, ignoring the ones which are not there"""
+    client = get_client()
+    for graph in graphs:
+        client.graphs.delete_item(key=graph, skip_if_missing=True)
+
+
 @dataclass
 class TestSetup:
     """Class for providing Validation Test Setup"""
 
-    client: Client
     existing_graph = "https://ns.eccenca.com/data/queries/"
     not_existing_graph = "https://example.org/not-here"
     persons_graph = "http://example.org/persons/"
@@ -46,25 +62,19 @@ class TestSetup:
     result_graph = "http://docker.localhost/results/"
 
 
-def _delete_graph(client: Client, graph: str) -> None:
-    """Delete a graph, ignoring it if it is not there"""
-    client.graphs.fetch_data()
-    client.graphs.delete_item(key=graph, skip_if_missing=True)
-
-
 @pytest.fixture
 def test_setup() -> Generator[TestSetup, Any]:
     """Provide Test Setup"""
     if environ.get("CMEM_BASE_URI", "") == "":
         pytest.skip("Needs CMEM configuration")
-    _ = TestSetup(client=Client.from_context(context=TestExecutionContext()))
+    _ = TestSetup()
+    client = get_client()
     for graph, file in ((_.persons_graph, _.persons_file), (_.shapes_graph, _.shapes_file)):
-        _.client.graphs.import_item(path=file, key=graph, on_conflict=ImportConflictPolicy.REPLACE)
-    _delete_graph(_.client, _.result_graph)
+        client.graphs.import_item(path=file, key=graph, on_conflict=ImportConflictPolicy.REPLACE)
+    client.graphs.delete_item(key=_.result_graph, skip_if_missing=True)
     yield _
     # purge setup
-    for graph in [_.persons_graph, _.shapes_graph, _.result_graph]:
-        _delete_graph(_.client, graph)
+    _delete_graphs(_.persons_graph, _.shapes_graph, _.result_graph)
 
 
 def test_fails(test_setup: TestSetup) -> None:
@@ -116,17 +126,17 @@ def test_safe_as_graph(test_setup: TestSetup) -> None:
         result_graph=_.result_graph,
         clear_result_graph=False,
     )
-    assert _get_triple_count(_.client, _.result_graph) == 0
+    assert _get_triple_count(_.result_graph) == 0
     task.execute(context=TestExecutionContext(), inputs=[])
-    result_graph_triples = _get_triple_count(_.client, _.result_graph)
+    result_graph_triples = _get_triple_count(_.result_graph)
     assert result_graph_triples > 0, "result graph should be empty"
     task.execute(context=TestExecutionContext(), inputs=[])
-    assert _get_triple_count(_.client, _.result_graph) == result_graph_triples * 2, (
+    assert _get_triple_count(_.result_graph) == result_graph_triples * 2, (
         "result graph should have two equal result sets"
     )
     task.clear_result_graph = True
     task.execute(context=TestExecutionContext(), inputs=[])
-    assert _get_triple_count(_.client, _.result_graph) == result_graph_triples, (
+    assert _get_triple_count(_.result_graph) == result_graph_triples, (
         "result graph should have as single result sets again"
     )
 
