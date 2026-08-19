@@ -7,12 +7,10 @@ from collections.abc import Generator, Sequence
 from types import SimpleNamespace
 from typing import Any
 
-from cmem.cmempy.workspace.projects.resources.resource import get_resource_response
-from cmem.cmempy.workspace.tasks import get_task
+from cmem_client.client import Client
 from cmem_plugin_base.dataintegration.context import (
     ExecutionContext,
     ExecutionReport,
-    UserContext,
 )
 from cmem_plugin_base.dataintegration.description import Icon, Plugin, PluginParameter
 from cmem_plugin_base.dataintegration.entity import Entities
@@ -23,11 +21,6 @@ from cmem_plugin_base.dataintegration.ports import (
     FixedNumberOfInputs,
     FlexibleNumberOfInputs,
     UnknownSchemaPort,
-)
-from cmem_plugin_base.dataintegration.utils import (
-    setup_cmempy_user_access,
-    split_task_id,
-    write_to_dataset,
 )
 from cmem_plugin_base.dataintegration.utils.entity_builder import build_entities_from_data
 from jsonschema import validate
@@ -76,13 +69,6 @@ The error handling behavior is configurable through the `Fail on violations` par
 
 
 DEFAULT_FAIL_ON_VIOLATION = False
-
-
-def get_task_metadata(project: str, task: str, context: UserContext) -> dict:
-    """Get metadata information of a task"""
-    setup_cmempy_user_access(context=context)
-    return dict(get_task(project=project, task=task))
-
 
 SOURCE = SimpleNamespace()
 SOURCE.entities = "entities"
@@ -172,7 +158,7 @@ class ValidateEntity(WorkflowPlugin):
     inputs: Sequence[Entities]
     execution_context: ExecutionContext
 
-    def __init__(  #  noqa: PLR0913
+    def __init__(  #  noqa: PLR0913 PLR0917
         self,
         source_mode: str,
         target_mode: str,
@@ -297,10 +283,10 @@ class ValidateEntity(WorkflowPlugin):
             )
         )
         if self.target_mode == TARGET.dataset:
-            write_to_dataset(
-                dataset_id=f"{context.task.project_id()}:{self.target_dataset}",
-                file_resource=io.StringIO(json.dumps(valid_json_objects)),
-                context=context.user,
+            Client.from_context(context=context).datasets.post_file_resource(
+                project_id=context.task.project_id(),
+                dataset_id=self.target_dataset,
+                file_resource=io.BytesIO(json.dumps(valid_json_objects).encode("utf-8")),
             )
             return None
 
@@ -319,16 +305,18 @@ class ValidateEntity(WorkflowPlugin):
     @staticmethod
     def _get_json_dataset_content(context: ExecutionContext, dataset: str) -> dict | list[dict]:
         """Get json dataset content"""
-        dataset_id = f"{context.task.project_id()}:{dataset}"
-        project_id, task_id = split_task_id(dataset_id)
-        task_meta_data = get_task_metadata(project_id, task_id, context.user)
-        resource_name = str(task_meta_data["data"]["parameters"]["file"]["value"])
-        response = get_resource_response(project_id, resource_name)
-        return response.json()  # type: ignore[no-any-return]
+        client = Client.from_context(context=context)
+        project_id = context.task.project_id()
+        resource_name = str(
+            client.datasets.get_item(project_id=project_id, dataset_id=dataset).data.parameters[
+                "file"
+            ]
+        )
+        return json.loads(client.files.read(f"{project_id}:{resource_name}"))  # type: ignore[no-any-return]
 
     def _convert_entities_to_json(
         self, inputs: Sequence[Entities], path_to_entities: dict[str, Entities], path: str = ""
-    ) -> Generator[dict[str, Any], None, None]:
+    ) -> Generator[dict[str, Any]]:
         """Convert a sequence of Entities into JSON-like dictionaries using recursive traversal."""
         for entities in inputs:
             # Initialize path-to-entities map for the root level

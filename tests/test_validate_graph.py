@@ -3,23 +3,50 @@
 from collections.abc import Generator
 from dataclasses import dataclass
 from os import environ
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from types import NoneType
 from typing import Any
 
-import cmem.cmempy.dp.proxy.graph as graph_api
 import pytest
+from cmem_client.client import Client
+from cmem_client.repositories.graphs import GraphExportConfig, GraphsRepository
+from cmem_client.repositories.protocols.import_item import ImportConflictPolicy
 from cmem_plugin_base.dataintegration.entity import Entities
 from cmem_plugin_base.testing import TestExecutionContext
-from requests import HTTPError, codes
 
 from cmem_plugin_validation.validate_graph.task import ValidateGraph
 from tests.fixtures import FIXTURE_DIR
 
+N_TRIPLES = GraphExportConfig(serialization=GraphsRepository.formats["n-triples"])
+
+
+def get_client() -> Client:
+    """Get a fresh client
+
+    Clients are created per operation on purpose: a client keeps its HTTP connections
+    alive in a pool, and a connection which idles while a validation process runs is
+    closed by the server before it is used again.
+    """
+    return Client.from_context(context=TestExecutionContext())
+
 
 def _get_triple_count(graph: str) -> int:
-    """Fetch a graph as n-triples and count the lines"""
-    lines = graph_api.get(graph=graph, accept="application/n-triples").text.splitlines()
-    return len(lines)
+    """Export a graph as n-triples and count the lines"""
+    client = get_client()
+    if graph not in client.graphs:
+        return 0
+    with TemporaryDirectory() as temp_dir:
+        path = Path(temp_dir) / "graph.nt"
+        client.graphs.export_item(key=graph, path=path, replace=True, configuration=N_TRIPLES)
+        return len(path.read_text(encoding="utf-8").splitlines())
+
+
+def _delete_graphs(*graphs: str) -> None:
+    """Delete graphs, ignoring the ones which are not there"""
+    client = get_client()
+    for graph in graphs:
+        client.graphs.delete_item(key=graph, skip_if_missing=True)
 
 
 @dataclass
@@ -36,26 +63,18 @@ class TestSetup:
 
 
 @pytest.fixture
-def test_setup() -> Generator[TestSetup, Any, None]:
+def test_setup() -> Generator[TestSetup, Any]:
     """Provide Test Setup"""
     if environ.get("CMEM_BASE_URI", "") == "":
         pytest.skip("Needs CMEM configuration")
     _ = TestSetup()
-    graph_api.post_streamed(replace=True, file=_.persons_file, graph=_.persons_graph)
-    graph_api.post_streamed(replace=True, file=_.shapes_file, graph=_.shapes_graph)
-    try:
-        graph_api.delete(graph=_.result_graph)
-    except HTTPError as error:
-        if error.response.status_code != codes.not_found:
-            raise HTTPError from error
+    client = get_client()
+    for graph, file in ((_.persons_graph, _.persons_file), (_.shapes_graph, _.shapes_file)):
+        client.graphs.import_item(path=file, key=graph, on_conflict=ImportConflictPolicy.REPLACE)
+    client.graphs.delete_item(key=_.result_graph, skip_if_missing=True)
     yield _
     # purge setup
-    for graph in [_.persons_graph, _.shapes_graph, _.result_graph]:
-        try:
-            graph_api.delete(graph=graph)
-        except HTTPError as error:
-            if error.response.status_code != codes.not_found:
-                raise HTTPError from error
+    _delete_graphs(_.persons_graph, _.shapes_graph, _.result_graph)
 
 
 def test_fails(test_setup: TestSetup) -> None:
