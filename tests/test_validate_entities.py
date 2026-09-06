@@ -60,6 +60,9 @@ def project() -> Generator[TestSetup]:
     """Provide the DI build project incl. assets."""
     _ = TestSetup()
     client = get_client(_.project_name)
+    # a run which dies before the teardown below leaves the project behind, and
+    # create_item then fails for every later run - so (re-)create it
+    client.projects.delete_item(_.project_name, skip_if_missing=True)
     client.projects.create_item(Project(name=_.project_name))
     _make_dataset(client, _.project_name, _.target_dataset, _.target_dataset_file)
     for dataset_name, dataset_file in (
