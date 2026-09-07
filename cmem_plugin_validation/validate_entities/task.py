@@ -286,7 +286,9 @@ class ValidateEntity(WorkflowPlugin):
             Client.from_context(context=context).datasets.post_file_resource(
                 project_id=context.task.project_id(),
                 dataset_id=self.target_dataset,
-                file_resource=io.BytesIO(json.dumps(valid_json_objects).encode("utf-8")),
+                file_resource=io.BytesIO(
+                    json.dumps(valid_json_objects, ensure_ascii=False).encode("utf-8")
+                ),
             )
             return None
 

@@ -11,6 +11,11 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/) and this p
 
 - updated dependencies and template
 
+### Fixed
+
+- Validate Entities task no longer converts non-ASCII characters to unicode escape sequences
+  when writing valid JSON objects to the target dataset
+
 ## [1.3.0] 2026-08-19
 
 ### Changed
