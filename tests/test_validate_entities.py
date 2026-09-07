@@ -5,16 +5,12 @@ from collections.abc import Generator
 from dataclasses import dataclass
 from os import environ
 from pathlib import Path
-from types import SimpleNamespace
-from typing import IO, Any
 
 import pytest
 from cmem_client.client import Client
 from cmem_client.models.dataset import Dataset, DatasetData, DatasetMetadata
 from cmem_client.models.project import Project
 from cmem_client.repositories.protocols.import_item import ImportConflictPolicy
-from cmem_plugin_base.dataintegration.context import ExecutionContext, ReportContext
-from cmem_plugin_base.dataintegration.entity import Entities, Entity, EntityPath, EntitySchema
 from cmem_plugin_base.testing import TestExecutionContext
 
 from cmem_plugin_validation.validate_entities.task import SOURCE, TARGET, ValidateEntity
@@ -29,8 +25,10 @@ class TestSetup:
     schema_dataset: str = "schema_dataset"
     valid_source_dataset_file: Path = FIXTURE_DIR / "source.valid.json"
     invalid_source_dataset_file: Path = FIXTURE_DIR / "source.invalid.json"
+    unicode_source_dataset_file: Path = FIXTURE_DIR / "source.unicode.json"
     valid_source_dataset: str = "valid_source_dataset"
     invalid_source_dataset: str = "invalid_source_dataset"
+    unicode_source_dataset: str = "unicode_source_dataset"
     target_dataset_file: str = "target.json"
     target_dataset: str = "target_dataset"
     project_name: str = "validate_entities_test_project"
@@ -72,6 +70,7 @@ def project() -> Generator[TestSetup]:
     for dataset_name, dataset_file in (
         (_.valid_source_dataset, _.valid_source_dataset_file),
         (_.invalid_source_dataset, _.invalid_source_dataset_file),
+        (_.unicode_source_dataset, _.unicode_source_dataset_file),
         (_.schema_dataset, _.schema_dataset_file),
     ):
         _make_dataset(client, _.project_name, dataset_name, dataset_file.name)
@@ -161,90 +160,25 @@ def test_source_and_target_dataset(project: TestSetup) -> None:
     assert len(data) == _.valid_source_object_count
 
 
-class _FakeDatasetItem:
-    """Stand-in for the dataset item cmem_client.datasets.get_item() returns"""
+@needs_cmem
+def test_target_dataset_keeps_unicode_characters(project: TestSetup) -> None:
+    """Test that non-ASCII characters in the source data are not escaped in the target dataset"""
+    _ = project
 
-    def __init__(self, file_name: str) -> None:
-        self.data = SimpleNamespace(parameters={"file": file_name})
-
-
-class _FakeDatasets:
-    """Stand-in for cmem_client.client.Client.datasets"""
-
-    def __init__(self, schema_file_name: str, written: dict[str, bytes]) -> None:
-        self._schema_file_name = schema_file_name
-        self._written = written
-
-    def get_item(self, project_id: str, dataset_id: str) -> _FakeDatasetItem:
-        """Return the schema dataset's file name, the only lookup task.py performs"""
-        return _FakeDatasetItem(self._schema_file_name)
-
-    def post_file_resource(
-        self, project_id: str, dataset_id: str, file_resource: IO[bytes]
-    ) -> None:
-        """Record the raw bytes written to the target dataset instead of uploading them"""
-        _ = project_id, dataset_id
-        self._written["content"] = file_resource.read()
-
-
-class _FakeFiles:
-    """Stand-in for cmem_client.client.Client.files"""
-
-    def __init__(self, schema_bytes: bytes) -> None:
-        self._schema_bytes = schema_bytes
-
-    def read(self, key: str) -> bytes:
-        """Return the JSON schema content, the only file this task reads"""
-        _ = key
-        return self._schema_bytes
-
-
-class _FakeClient:
-    """Stand-in for cmem_client.client.Client, avoiding a real Corporate Memory connection"""
-
-    def __init__(self, schema_bytes: bytes, schema_file_name: str, written: dict[str, bytes]):
-        self.datasets = _FakeDatasets(schema_file_name, written)
-        self.files = _FakeFiles(schema_bytes)
-
-
-class _StubExecutionContext(ExecutionContext):
-    """An execution context which needs no Corporate Memory connection.
-
-    task.py only reads ``context.task.project_id()`` and calls
-    ``context.report.update()`` - it never touches ``context.user``.
-    """
-
-    def __init__(self, project_id: str) -> None:
-        self.report = ReportContext()
-        self.task = SimpleNamespace(project_id=lambda: project_id)
-
-
-def test_target_dataset_keeps_unicode_characters(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Test that non-ASCII characters in entity values are not escaped in the target dataset
-
-    Uses a fake Client so this runs without a Corporate Memory connection: task.py only
-    calls Client.datasets.get_item() and Client.files.read() to resolve the JSON schema,
-    and Client.datasets.post_file_resource() to write the target dataset.
-    """
-    schema = json.dumps({"type": "object", "properties": {"city": {"type": "string"}}}).encode()
-    written: dict[str, Any] = {}
-    monkeypatch.setattr(
-        "cmem_plugin_validation.validate_entities.task.Client.from_context",
-        lambda context: _FakeClient(schema, "schema.json", written),
-    )
-
-    entities = Entities(
-        entities=[Entity(uri="urn:x-1", values=[["Köln"]])],
-        schema=EntitySchema(type_uri="", paths=[EntityPath(path="city", is_single_value=True)]),
-    )
     ValidateEntity(
-        source_mode=SOURCE.entities,
+        source_mode=SOURCE.dataset,
         target_mode=TARGET.dataset,
-        json_schema_dataset="schema_dataset",
+        json_schema_dataset=_.schema_dataset,
         fail_on_violations=True,
-        target_dataset="target_dataset",
-    ).execute([entities], _StubExecutionContext(project_id="validate_entities_unit_test"))
+        source_dataset=_.unicode_source_dataset,
+        target_dataset=_.target_dataset,
+    ).execute([], TestExecutionContext(project_id=_.project_name))
 
-    raw_content = written["content"].decode("utf-8")
-    assert "\\u00f6" not in raw_content
-    assert json.loads(raw_content) == [{"city": "Köln"}]
+    client = get_client(_.project_name)
+    raw_content = client.files.read(f"{_.project_name}:{_.target_dataset_file}").decode("utf-8")
+    assert "\\u00e4" not in raw_content  # ä
+    assert "\\u00fc" not in raw_content  # ü
+    assert json.loads(raw_content) == [
+        {"name": "Käse", "price": 5.5},
+        {"name": "Müsli", "price": 3.2},
+    ]
