@@ -10,6 +10,8 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/) and this p
 ### Changed
 
 - updated dependencies and template
+- corrected and clarified the documentation and parameter descriptions of the
+  `Validate Entities` and `Validate Knowledge Graph` plugins
 
 ### Fixed
 
