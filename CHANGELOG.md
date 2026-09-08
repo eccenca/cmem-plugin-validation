@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/) and this project adheres to [Semantic Versioning](https://semver.org/)
 
+## [Unreleased]
+
+### Changed
+
+- corrected and clarified the documentation and parameter descriptions of the
+  `Validate Entities` and `Validate Knowledge Graph` plugins
+
+### Fixed
+
+- Validate Entities task no longer converts non-ASCII characters to unicode escape sequences
+  when writing valid JSON objects to the target dataset
+
 ## [1.3.1] 2026-09-08
 
 ### Fixed
@@ -14,13 +26,6 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/) and this p
 ### Changed
 
 - updated dependencies and template
-- corrected and clarified the documentation and parameter descriptions of the
-  `Validate Entities` and `Validate Knowledge Graph` plugins
-
-### Fixed
-
-- Validate Entities task no longer converts non-ASCII characters to unicode escape sequences
-  when writing valid JSON objects to the target dataset
 
 ## [1.3.0] 2026-08-19
 
