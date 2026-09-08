@@ -13,12 +13,18 @@ from cmem_client.client import Client
 from cmem_client.repositories.graphs import GraphExportConfig, GraphsRepository
 from cmem_client.repositories.protocols.import_item import ImportConflictPolicy
 from cmem_plugin_base.dataintegration.entity import Entities
-from cmem_plugin_base.testing import TestExecutionContext
+from cmem_plugin_base.dataintegration.parameter.graph import GraphParameterType
+from cmem_plugin_base.testing import TestExecutionContext, TestPluginContext
 
-from cmem_plugin_validation.validate_graph.task import ValidateGraph
+from cmem_plugin_validation.validate_graph.task import CONTEXT_GRAPH_CLASSES, ValidateGraph
 from tests.fixtures import FIXTURE_DIR
 
 N_TRIPLES = GraphExportConfig(serialization=GraphsRepository.formats["n-triples"])
+
+needs_cmem = pytest.mark.skipif(
+    environ.get("CMEM_BASE_URI", "") == "",
+    reason="Needs eccenca Corporate Memory configuration",
+)
 
 
 def get_client() -> Client:
@@ -60,6 +66,8 @@ class TestSetup:
     shapes_graph = "http://docker.localhost/shapes-for-persons/"
     shapes_file = FIXTURE_DIR / "shapes.ttl"
     result_graph = "http://docker.localhost/results/"
+    ontology_graph = "http://docker.localhost/ontology-for-persons/"
+    ontology_file = FIXTURE_DIR / "ontology.ttl"
 
 
 @pytest.fixture
@@ -75,6 +83,18 @@ def test_setup() -> Generator[TestSetup, Any]:
     yield _
     # purge setup
     _delete_graphs(_.persons_graph, _.shapes_graph, _.result_graph)
+
+
+@pytest.fixture
+def ontology_graph() -> Generator[str, Any]:
+    """Provide a graph which is typed as an owl:Ontology"""
+    _ = TestSetup()
+    client = get_client()
+    client.graphs.import_item(
+        path=_.ontology_file, key=_.ontology_graph, on_conflict=ImportConflictPolicy.REPLACE
+    )
+    yield _.ontology_graph
+    _delete_graphs(_.ontology_graph)
 
 
 def test_fails(test_setup: TestSetup) -> None:
@@ -165,3 +185,22 @@ WHERE {
     assert task.execute(context=TestExecutionContext(), inputs=[]) is None, (
         "Should no violations, since no person was validated"
     )
+
+
+@needs_cmem
+def test_ontology_as_context_graph(ontology_graph: str) -> None:
+    """Test that an ontology graph is offered as a context graph"""
+    parameter_type = GraphParameterType(
+        classes=CONTEXT_GRAPH_CLASSES,
+        show_di_graphs=False,
+        show_graphs_without_class=True,
+        show_system_graphs=True,
+        allow_only_autocompleted_values=False,
+    )
+    values = {
+        _.value
+        for _ in parameter_type.autocomplete(
+            query_terms=[], depend_on_parameter_values=[], context=TestPluginContext()
+        )
+    }
+    assert ontology_graph in values
