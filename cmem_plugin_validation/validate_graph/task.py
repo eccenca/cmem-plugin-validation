@@ -27,8 +27,24 @@ from httpx import HTTPStatusError
 from cmem_plugin_validation.validate_graph.state import State
 
 DOCUMENTATION = """
-Start a graph validation process which verifies, that resources in a specific graph are valid
-according to the node shapes in a shape catalog graph.
+Starts a graph validation process which verifies that resources in a specific graph are valid
+according to the node shapes in a shape catalog graph. The task waits for the validation to
+finish before completing.
+
+The task has no input port. Violations found during validation are always summarized in the
+workflow report, and can also be materialized into a result graph in the project. Sending each
+violation as an entity to an output port is optional; when that is disabled, the task has no
+output port either.
+
+### Error Handling
+
+Every resource is validated regardless of the outcome. The task can then either:
+
+- Fail once validation completes if any resource has violations, halting the workflow.
+- Report violations only as warnings, allowing follow-up tasks to run based on the results.
+
+The error handling behavior is configurable through the **Fail workflow on violations**
+parameter.
 """
 
 CONTEXT_GRAPH_CLASSES = [
@@ -92,23 +108,30 @@ WHERE { ?resource a ?class . FILTER isIRI(?resource) }
         PluginParameter(
             name="clear_result_graph",
             label="Clear result graph before validation",
+            description="If enabled, the existing content of the result graph is deleted"
+            " before validation starts. Has no effect when Result graph is left empty.",
             default_value=DEFAULT_CLEAR_RESULT_GRAPH,
         ),
         PluginParameter(
             name="fail_on_violations",
             label="Fail workflow on violations",
+            description="If enabled, the workflow fails once validation completes if any"
+            " resource has violations. All resources are validated either way; disabling this"
+            " instead reports the violations as warnings.",
             default_value=DEFAULT_FAIL_ON_VIOLATION,
         ),
         PluginParameter(
             name="output_results",
             label="Output violations as entities",
+            description="If enabled, each violation is sent as an entity to an output port"
+            " for further processing in the workflow. Disabling this removes the output port.",
             default_value=DEFAULT_OUTPUT_RESULTS,
         ),
         PluginParameter(
             name="sparql_query",
             label="Resource Selection Query",
             description="The query to select the resources to validate. "
-            "Use {{context_graph}} as a placeholder for the select context graph for validation.",
+            "Use `{{context_graph}}` as a placeholder for the selected Context Graph.",
             default_value=DEFAULT_SPARQL_QUERY,
             advanced=True,
         ),

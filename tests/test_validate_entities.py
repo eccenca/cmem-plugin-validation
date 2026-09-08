@@ -25,8 +25,10 @@ class TestSetup:
     schema_dataset: str = "schema_dataset"
     valid_source_dataset_file: Path = FIXTURE_DIR / "source.valid.json"
     invalid_source_dataset_file: Path = FIXTURE_DIR / "source.invalid.json"
+    unicode_source_dataset_file: Path = FIXTURE_DIR / "source.unicode.json"
     valid_source_dataset: str = "valid_source_dataset"
     invalid_source_dataset: str = "invalid_source_dataset"
+    unicode_source_dataset: str = "unicode_source_dataset"
     target_dataset_file: str = "target.json"
     target_dataset: str = "target_dataset"
     project_name: str = "validate_entities_test_project"
@@ -68,6 +70,7 @@ def project() -> Generator[TestSetup]:
     for dataset_name, dataset_file in (
         (_.valid_source_dataset, _.valid_source_dataset_file),
         (_.invalid_source_dataset, _.invalid_source_dataset_file),
+        (_.unicode_source_dataset, _.unicode_source_dataset_file),
         (_.schema_dataset, _.schema_dataset_file),
     ):
         _make_dataset(client, _.project_name, dataset_name, dataset_file.name)
@@ -138,7 +141,8 @@ def test_execute_with_source_dataset(project: TestSetup) -> None:
         assert len(list(entities.entities)) == 1
 
 
-def validate_test_source_target_dataset(project: TestSetup) -> None:
+@needs_cmem
+def test_source_and_target_dataset(project: TestSetup) -> None:
     """Test source and target dataset mode"""
     _ = project
 
@@ -154,3 +158,27 @@ def validate_test_source_target_dataset(project: TestSetup) -> None:
     client = get_client(_.project_name)
     data = json.loads(client.files.read(f"{_.project_name}:{_.target_dataset_file}"))
     assert len(data) == _.valid_source_object_count
+
+
+@needs_cmem
+def test_target_dataset_keeps_unicode_characters(project: TestSetup) -> None:
+    """Test that non-ASCII characters in the source data are not escaped in the target dataset"""
+    _ = project
+
+    ValidateEntity(
+        source_mode=SOURCE.dataset,
+        target_mode=TARGET.dataset,
+        json_schema_dataset=_.schema_dataset,
+        fail_on_violations=True,
+        source_dataset=_.unicode_source_dataset,
+        target_dataset=_.target_dataset,
+    ).execute([], TestExecutionContext(project_id=_.project_name))
+
+    client = get_client(_.project_name)
+    raw_content = client.files.read(f"{_.project_name}:{_.target_dataset_file}").decode("utf-8")
+    assert "\\u00e4" not in raw_content  # ä
+    assert "\\u00fc" not in raw_content  # ü
+    assert json.loads(raw_content) == [
+        {"name": "Käse", "price": 5.5},
+        {"name": "Müsli", "price": 3.2},
+    ]
