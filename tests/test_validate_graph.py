@@ -38,10 +38,16 @@ def get_client() -> Client:
 
 
 def _get_triple_count(graph: str) -> int:
-    """Export a graph as n-triples and count the lines"""
+    """Export a graph as n-triples and count the lines
+
+    A graph which is not there fails the test instead of counting as empty. The two
+    are different findings: a validation which writes no result is a plugin problem,
+    while a result graph vanishing from the deployment is not, and reporting the
+    second as a count of zero hides it behind an assertion about numbers.
+    """
     client = get_client()
     if graph not in client.graphs:
-        return 0
+        pytest.fail(f"Graph <{graph}> does not exist in the deployment")
     with TemporaryDirectory() as temp_dir:
         path = Path(temp_dir) / "graph.nt"
         client.graphs.export_item(key=graph, path=path, replace=True, configuration=N_TRIPLES)
@@ -146,10 +152,10 @@ def test_safe_as_graph(test_setup: TestSetup) -> None:
         result_graph=_.result_graph,
         clear_result_graph=False,
     )
-    assert _get_triple_count(_.result_graph) == 0
+    assert _.result_graph not in get_client().graphs, "result graph should not exist yet"
     task.execute(context=TestExecutionContext(), inputs=[])
     result_graph_triples = _get_triple_count(_.result_graph)
-    assert result_graph_triples > 0, "result graph should be empty"
+    assert result_graph_triples > 0, "result graph should hold a result set"
     task.execute(context=TestExecutionContext(), inputs=[])
     assert _get_triple_count(_.result_graph) == result_graph_triples * 2, (
         "result graph should have two equal result sets"
