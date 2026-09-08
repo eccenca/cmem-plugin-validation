@@ -7,6 +7,10 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/) and this p
 
 ## [Unreleased]
 
+### Fixed
+
+- Ontology graphs can now be selected as the context graph
+
 ### Changed
 
 - updated dependencies and template

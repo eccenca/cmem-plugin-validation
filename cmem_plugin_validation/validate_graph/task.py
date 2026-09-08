@@ -31,6 +31,12 @@ Start a graph validation process which verifies, that resources in a specific gr
 according to the node shapes in a shape catalog graph.
 """
 
+CONTEXT_GRAPH_CLASSES = [
+    "https://vocab.eccenca.com/di/Dataset",
+    "http://rdfs.org/ns/void#Dataset",
+    "https://vocab.eccenca.com/shui/QueryCatalog",
+    "http://www.w3.org/2002/07/owl#Ontology",
+]
 DEFAULT_SHAPE_GRAPH = "https://vocab.eccenca.com/shacl/"
 DEFAULT_RESULT_GRAPH = ""
 DEFAULT_CLEAR_RESULT_GRAPH = False
@@ -54,6 +60,7 @@ WHERE { ?resource a ?class . FILTER isIRI(?resource) }
             label="Context Graph",
             description="This graph holds the resources you want to validate.",
             param_type=GraphParameterType(
+                classes=CONTEXT_GRAPH_CLASSES,
                 show_di_graphs=False,
                 show_graphs_without_class=True,
                 show_system_graphs=True,
