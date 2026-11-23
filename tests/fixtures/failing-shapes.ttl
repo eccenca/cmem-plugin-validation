@@ -1,0 +1,24 @@
+@prefix foaf: <http://xmlns.com/foaf/0.1/> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix shui: <https://vocab.eccenca.com/shui/> .
+
+# A shape catalog which lets the validation process end in state ERROR: the SPARQL
+# constraint parses, but fails when it is evaluated, since the SERVICE is not reachable.
+
+<http://docker.localhost/failing-shapes-for-persons/> a shui:ShapeCatalog;
+  rdfs:label "Failing Shapes for Persons"@en .
+
+<http://docker.localhost/failing-shapes-for-persons/person>
+  a sh:NodeShape;
+  sh:name "Person"@en;
+  sh:targetClass foaf:Person;
+  sh:sparql [
+    a sh:SPARQLConstraint;
+    sh:message "unreachable service";
+    sh:select """
+SELECT $this WHERE {
+  SERVICE <http://127.0.0.1:1/sparql> { $this ?p ?o }
+}
+"""
+  ] .

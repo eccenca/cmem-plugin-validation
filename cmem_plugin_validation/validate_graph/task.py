@@ -6,7 +6,12 @@ from time import sleep
 
 from cmem_client.client import Client
 from cmem_client.models.query_catalog import Query
-from cmem_client.models.validation import STATUS_RUNNING, STATUS_SCHEDULED, ValidationViolation
+from cmem_client.models.validation import (
+    STATUS_FINISHED,
+    STATUS_RUNNING,
+    STATUS_SCHEDULED,
+    ValidationViolation,
+)
 from cmem_plugin_base.dataintegration.context import ExecutionContext, ExecutionReport
 from cmem_plugin_base.dataintegration.description import Icon, Plugin, PluginParameter
 from cmem_plugin_base.dataintegration.entity import (
@@ -229,6 +234,17 @@ class ValidateGraph(WorkflowPlugin):
                 continue
             # when reported as finished, error or cancelled break out
             break
+        if state.status != STATUS_FINISHED:
+            failure = state.error or f"Validation process ended in state {state.status}."
+            context.report.update(
+                ExecutionReport(
+                    entity_count=state.completed,
+                    operation="read",
+                    operation_desc=f"/ {state.total} Resources validated",
+                    error=failure,
+                )
+            )
+            raise RuntimeError(failure)
         summary: list[tuple[str, str]] = [
             (data_key, str(state.data[data_key])) for data_key in state.data
         ]

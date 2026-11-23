@@ -69,6 +69,8 @@ class TestSetup:
     result_graph = "http://docker.localhost/results/"
     ontology_graph = "http://docker.localhost/ontology-for-persons/"
     ontology_file = FIXTURE_DIR / "ontology.ttl"
+    failing_shapes_graph = "http://docker.localhost/failing-shapes-for-persons/"
+    failing_shapes_file = FIXTURE_DIR / "failing-shapes.ttl"
 
 
 NO_SHAPE_TARGET_QUERY = """
@@ -129,6 +131,19 @@ def ontology_graph() -> Generator[str, Any]:
     _delete_graphs(_.ontology_graph)
 
 
+@pytest.fixture
+def failing_shapes_graph(test_setup: TestSetup) -> Generator[str, Any]:
+    """Provide a shape graph which lets the validation process end in state ERROR"""
+    _ = test_setup
+    get_client().graphs.import_item(
+        path=_.failing_shapes_file,
+        key=_.failing_shapes_graph,
+        on_conflict=ImportConflictPolicy.REPLACE,
+    )
+    yield _.failing_shapes_graph
+    _delete_graphs(_.failing_shapes_graph)
+
+
 def test_fails(test_setup: TestSetup) -> None:
     """Test failing task execution"""
     _ = test_setup
@@ -172,6 +187,27 @@ def test_fail_on_violations_with_violations(test_setup: TestSetup) -> None:
     assert report.entity_count == 1
     assert report.error == "Found 1 Violations in 1 / 4 Resources."
     assert report.warnings == []
+
+
+@pytest.mark.parametrize("fail_on_violations", [True, False])
+def test_fails_on_validation_error(
+    test_setup: TestSetup, failing_shapes_graph: str, fail_on_violations: bool
+) -> None:
+    """Test that a validation process which ends with an error fails the task"""
+    _ = test_setup
+    task = ValidateGraph(
+        context_graph=_.persons_graph,
+        shape_graph=failing_shapes_graph,
+        fail_on_violations=fail_on_violations,
+    )
+    context = TestExecutionContext()
+    recorder = RecordingReportContext()
+    context.report = recorder
+    with pytest.raises(RuntimeError, match="Error in validating resource"):
+        task.execute(context=context, inputs=[])
+    error = recorder.reports[-1].error
+    assert error is not None
+    assert "Error in validating resource" in error
 
 
 def test_warn_on_violations_without_violations(test_setup: TestSetup) -> None:
