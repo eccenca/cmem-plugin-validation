@@ -232,10 +232,12 @@ class ValidateGraph(WorkflowPlugin):
         summary: list[tuple[str, str]] = [
             (data_key, str(state.data[data_key])) for data_key in state.data
         ]
-        validation_message = (
-            f"Found {state.violations} Violations "
-            f"in {state.with_violations} / {state.total} Resources."
-        )
+        validation_message = None
+        if state.with_violations:
+            validation_message = (
+                f"Found {state.violations} Violations "
+                f"in {state.with_violations} / {state.total} Resources."
+            )
         context.report.update(
             ExecutionReport(
                 entity_count=state.with_violations,
@@ -243,7 +245,9 @@ class ValidateGraph(WorkflowPlugin):
                 operation_desc=f"/ {state.total} Resources have violations",
                 summary=summary,
                 error=validation_message if self.fail_on_violations else None,
-                warnings=[validation_message] if not self.fail_on_violations else [],
+                warnings=[validation_message]
+                if validation_message and not self.fail_on_violations
+                else [],
             )
         )
         if not self.output_results:

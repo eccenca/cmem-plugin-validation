@@ -12,6 +12,7 @@ import pytest
 from cmem_client.client import Client
 from cmem_client.repositories.graphs import GraphExportConfig, GraphsRepository
 from cmem_client.repositories.protocols.import_item import ImportConflictPolicy
+from cmem_plugin_base.dataintegration.context import ExecutionReport, ReportContext
 from cmem_plugin_base.dataintegration.entity import Entities
 from cmem_plugin_base.dataintegration.parameter.graph import GraphParameterType
 from cmem_plugin_base.testing import TestExecutionContext, TestPluginContext
@@ -70,6 +71,37 @@ class TestSetup:
     ontology_file = FIXTURE_DIR / "ontology.ttl"
 
 
+NO_SHAPE_TARGET_QUERY = """
+PREFIX di: <https://vocab.eccenca.com/di/>
+SELECT DISTINCT ?resource
+FROM <{{context_graph}}>
+WHERE {
+    ?resource a di:Dataset.
+    FILTER isIRI(?resource)
+}
+"""
+
+
+class RecordingReportContext(ReportContext):
+    """Report context which keeps the reports, so a test can look at them"""
+
+    def __init__(self) -> None:
+        self.reports: list[ExecutionReport] = []
+
+    def update(self, report: ExecutionReport) -> None:
+        """Keep the report"""
+        self.reports.append(report)
+
+
+def _execute_and_get_report(task: ValidateGraph) -> ExecutionReport:
+    """Execute a task and return the last execution report it sent"""
+    context = TestExecutionContext()
+    recorder = RecordingReportContext()
+    context.report = recorder
+    task.execute(context=context, inputs=[])
+    return recorder.reports[-1]
+
+
 @pytest.fixture
 def test_setup() -> Generator[TestSetup, Any]:
     """Provide Test Setup"""
@@ -113,6 +145,58 @@ def test_fails(test_setup: TestSetup) -> None:
             context=TestExecutionContext(), inputs=[]
         )
     assert "does not exist in graph list" in str(exception_info)
+
+
+def test_fail_on_violations_without_violations(test_setup: TestSetup) -> None:
+    """Test that a conforming graph does not fail the task with fail_on_violations"""
+    _ = test_setup
+    task = ValidateGraph(
+        context_graph=_.persons_graph,
+        shape_graph=_.shapes_graph,
+        sparql_query=NO_SHAPE_TARGET_QUERY,
+        fail_on_violations=True,
+    )
+    report = _execute_and_get_report(task)
+    assert report.entity_count == 0
+    assert report.error is None
+    assert report.warnings == []
+
+
+def test_fail_on_violations_with_violations(test_setup: TestSetup) -> None:
+    """Test that a graph with violations fails the task with fail_on_violations"""
+    _ = test_setup
+    task = ValidateGraph(
+        context_graph=_.persons_graph, shape_graph=_.shapes_graph, fail_on_violations=True
+    )
+    report = _execute_and_get_report(task)
+    assert report.entity_count == 1
+    assert report.error == "Found 1 Violations in 1 / 4 Resources."
+    assert report.warnings == []
+
+
+def test_warn_on_violations_without_violations(test_setup: TestSetup) -> None:
+    """Test that a conforming graph adds no warning without fail_on_violations"""
+    _ = test_setup
+    task = ValidateGraph(
+        context_graph=_.persons_graph,
+        shape_graph=_.shapes_graph,
+        sparql_query=NO_SHAPE_TARGET_QUERY,
+        fail_on_violations=False,
+    )
+    report = _execute_and_get_report(task)
+    assert report.error is None
+    assert report.warnings == []
+
+
+def test_warn_on_violations_with_violations(test_setup: TestSetup) -> None:
+    """Test that a graph with violations adds a warning without fail_on_violations"""
+    _ = test_setup
+    task = ValidateGraph(
+        context_graph=_.persons_graph, shape_graph=_.shapes_graph, fail_on_violations=False
+    )
+    report = _execute_and_get_report(task)
+    assert report.error is None
+    assert report.warnings == ["Found 1 Violations in 1 / 4 Resources."]
 
 
 def test_output_results(test_setup: TestSetup) -> None:

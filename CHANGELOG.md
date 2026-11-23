@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/) and this project adheres to [Semantic Versioning](https://semver.org/)
 
+## [Unreleased]
+
+### Fixed
+
+- Validate Knowledge Graph task with `Fail workflow on violations` no longer fails the
+  workflow when the validation finds no violations
+- Validate Knowledge Graph task no longer reports a warning when the validation finds no
+  violations
+
 ## [1.3.2] 2026-09-08
 
 ### Changed
