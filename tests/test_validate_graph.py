@@ -292,16 +292,7 @@ def test_different_query(test_setup: TestSetup) -> None:
     result = task.execute(context=TestExecutionContext(), inputs=[])
     assert isinstance(result, Entities)
     assert len(list(result.entities)) == 1, "There should be a single violation entity"
-    query = """
-PREFIX di: <https://vocab.eccenca.com/di/>
-SELECT DISTINCT ?resource
-FROM <{{context_graph}}>
-WHERE {
-    ?resource a di:Dataset.
-    FILTER isIRI(?resource)
-}
-"""
-    task.sparql_query = query
+    task.sparql_query = NO_SHAPE_TARGET_QUERY
     assert task.execute(context=TestExecutionContext(), inputs=[]) is None, (
         "Should no violations, since no person was validated"
     )

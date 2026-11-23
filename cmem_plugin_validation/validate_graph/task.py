@@ -49,7 +49,8 @@ Every resource is validated regardless of the outcome. The task can then either:
 - Report violations only as warnings, allowing follow-up tasks to run based on the results.
 
 The error handling behavior is configurable through the **Fail workflow on violations**
-parameter.
+parameter. If the validation process itself ends with an error or is cancelled on the server,
+the task fails regardless of this parameter.
 """
 
 CONTEXT_GRAPH_CLASSES = [

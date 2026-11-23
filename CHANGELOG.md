@@ -14,7 +14,7 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/) and this p
 - Validate Knowledge Graph task no longer reports a warning when the validation finds no
   violations
 - Validate Knowledge Graph task fails with the error of the validation process when the
-  process ends with an error or is cancelled, instead of reporting it as validated
+  process ends with an error or is cancelled on the server, instead of reporting it as validated
 
 ## [1.3.2] 2026-09-08
 
