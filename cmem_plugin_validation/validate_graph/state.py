@@ -14,6 +14,7 @@ class State:
     total: int
     with_violations: int
     violations: int
+    error: str | None
 
     def __init__(self, client: Client, id_: str):
         self.client = client
@@ -29,3 +30,4 @@ class State:
         self.total = aggregation.resource_count
         self.with_violations = aggregation.resources_with_violations_count
         self.violations = aggregation.violations_count
+        self.error = aggregation.error

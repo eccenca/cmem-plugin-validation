@@ -6,7 +6,12 @@ from time import sleep
 
 from cmem_client.client import Client
 from cmem_client.models.query_catalog import Query
-from cmem_client.models.validation import STATUS_RUNNING, STATUS_SCHEDULED, ValidationViolation
+from cmem_client.models.validation import (
+    STATUS_FINISHED,
+    STATUS_RUNNING,
+    STATUS_SCHEDULED,
+    ValidationViolation,
+)
 from cmem_plugin_base.dataintegration.context import ExecutionContext, ExecutionReport
 from cmem_plugin_base.dataintegration.description import Icon, Plugin, PluginParameter
 from cmem_plugin_base.dataintegration.entity import (
@@ -44,7 +49,8 @@ Every resource is validated regardless of the outcome. The task can then either:
 - Report violations only as warnings, allowing follow-up tasks to run based on the results.
 
 The error handling behavior is configurable through the **Fail workflow on violations**
-parameter.
+parameter. If the validation process itself ends with an error or is cancelled on the server,
+the task fails regardless of this parameter.
 """
 
 CONTEXT_GRAPH_CLASSES = [
@@ -229,13 +235,26 @@ class ValidateGraph(WorkflowPlugin):
                 continue
             # when reported as finished, error or cancelled break out
             break
+        if state.status != STATUS_FINISHED:
+            failure = state.error or f"Validation process ended in state {state.status}."
+            context.report.update(
+                ExecutionReport(
+                    entity_count=state.completed,
+                    operation="read",
+                    operation_desc=f"/ {state.total} Resources validated",
+                    error=failure,
+                )
+            )
+            raise RuntimeError(failure)
         summary: list[tuple[str, str]] = [
             (data_key, str(state.data[data_key])) for data_key in state.data
         ]
-        validation_message = (
-            f"Found {state.violations} Violations "
-            f"in {state.with_violations} / {state.total} Resources."
-        )
+        validation_message = None
+        if state.with_violations:
+            validation_message = (
+                f"Found {state.violations} Violations "
+                f"in {state.with_violations} / {state.total} Resources."
+            )
         context.report.update(
             ExecutionReport(
                 entity_count=state.with_violations,
@@ -243,7 +262,9 @@ class ValidateGraph(WorkflowPlugin):
                 operation_desc=f"/ {state.total} Resources have violations",
                 summary=summary,
                 error=validation_message if self.fail_on_violations else None,
-                warnings=[validation_message] if not self.fail_on_violations else [],
+                warnings=[validation_message]
+                if validation_message and not self.fail_on_violations
+                else [],
             )
         )
         if not self.output_results:

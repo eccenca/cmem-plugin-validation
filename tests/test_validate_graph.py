@@ -12,6 +12,7 @@ import pytest
 from cmem_client.client import Client
 from cmem_client.repositories.graphs import GraphExportConfig, GraphsRepository
 from cmem_client.repositories.protocols.import_item import ImportConflictPolicy
+from cmem_plugin_base.dataintegration.context import ExecutionReport, ReportContext
 from cmem_plugin_base.dataintegration.entity import Entities
 from cmem_plugin_base.dataintegration.parameter.graph import GraphParameterType
 from cmem_plugin_base.testing import TestExecutionContext, TestPluginContext
@@ -68,6 +69,39 @@ class TestSetup:
     result_graph = "http://docker.localhost/results/"
     ontology_graph = "http://docker.localhost/ontology-for-persons/"
     ontology_file = FIXTURE_DIR / "ontology.ttl"
+    failing_shapes_graph = "http://docker.localhost/failing-shapes-for-persons/"
+    failing_shapes_file = FIXTURE_DIR / "failing-shapes.ttl"
+
+
+NO_SHAPE_TARGET_QUERY = """
+PREFIX di: <https://vocab.eccenca.com/di/>
+SELECT DISTINCT ?resource
+FROM <{{context_graph}}>
+WHERE {
+    ?resource a di:Dataset.
+    FILTER isIRI(?resource)
+}
+"""
+
+
+class RecordingReportContext(ReportContext):
+    """Report context which keeps the reports, so a test can look at them"""
+
+    def __init__(self) -> None:
+        self.reports: list[ExecutionReport] = []
+
+    def update(self, report: ExecutionReport) -> None:
+        """Keep the report"""
+        self.reports.append(report)
+
+
+def _execute_and_get_report(task: ValidateGraph) -> ExecutionReport:
+    """Execute a task and return the last execution report it sent"""
+    context = TestExecutionContext()
+    recorder = RecordingReportContext()
+    context.report = recorder
+    task.execute(context=context, inputs=[])
+    return recorder.reports[-1]
 
 
 @pytest.fixture
@@ -97,6 +131,19 @@ def ontology_graph() -> Generator[str, Any]:
     _delete_graphs(_.ontology_graph)
 
 
+@pytest.fixture
+def failing_shapes_graph(test_setup: TestSetup) -> Generator[str, Any]:
+    """Provide a shape graph which lets the validation process end in state ERROR"""
+    _ = test_setup
+    get_client().graphs.import_item(
+        path=_.failing_shapes_file,
+        key=_.failing_shapes_graph,
+        on_conflict=ImportConflictPolicy.REPLACE,
+    )
+    yield _.failing_shapes_graph
+    _delete_graphs(_.failing_shapes_graph)
+
+
 def test_fails(test_setup: TestSetup) -> None:
     """Test failing task execution"""
     _ = test_setup
@@ -113,6 +160,79 @@ def test_fails(test_setup: TestSetup) -> None:
             context=TestExecutionContext(), inputs=[]
         )
     assert "does not exist in graph list" in str(exception_info)
+
+
+def test_fail_on_violations_without_violations(test_setup: TestSetup) -> None:
+    """Test that a conforming graph does not fail the task with fail_on_violations"""
+    _ = test_setup
+    task = ValidateGraph(
+        context_graph=_.persons_graph,
+        shape_graph=_.shapes_graph,
+        sparql_query=NO_SHAPE_TARGET_QUERY,
+        fail_on_violations=True,
+    )
+    report = _execute_and_get_report(task)
+    assert report.entity_count == 0
+    assert report.error is None
+    assert report.warnings == []
+
+
+def test_fail_on_violations_with_violations(test_setup: TestSetup) -> None:
+    """Test that a graph with violations fails the task with fail_on_violations"""
+    _ = test_setup
+    task = ValidateGraph(
+        context_graph=_.persons_graph, shape_graph=_.shapes_graph, fail_on_violations=True
+    )
+    report = _execute_and_get_report(task)
+    assert report.entity_count == 1
+    assert report.error == "Found 1 Violations in 1 / 4 Resources."
+    assert report.warnings == []
+
+
+@pytest.mark.parametrize("fail_on_violations", [True, False])
+def test_fails_on_validation_error(
+    test_setup: TestSetup, failing_shapes_graph: str, fail_on_violations: bool
+) -> None:
+    """Test that a validation process which ends with an error fails the task"""
+    _ = test_setup
+    task = ValidateGraph(
+        context_graph=_.persons_graph,
+        shape_graph=failing_shapes_graph,
+        fail_on_violations=fail_on_violations,
+    )
+    context = TestExecutionContext()
+    recorder = RecordingReportContext()
+    context.report = recorder
+    with pytest.raises(RuntimeError, match="Error in validating resource"):
+        task.execute(context=context, inputs=[])
+    error = recorder.reports[-1].error
+    assert error is not None
+    assert "Error in validating resource" in error
+
+
+def test_warn_on_violations_without_violations(test_setup: TestSetup) -> None:
+    """Test that a conforming graph adds no warning without fail_on_violations"""
+    _ = test_setup
+    task = ValidateGraph(
+        context_graph=_.persons_graph,
+        shape_graph=_.shapes_graph,
+        sparql_query=NO_SHAPE_TARGET_QUERY,
+        fail_on_violations=False,
+    )
+    report = _execute_and_get_report(task)
+    assert report.error is None
+    assert report.warnings == []
+
+
+def test_warn_on_violations_with_violations(test_setup: TestSetup) -> None:
+    """Test that a graph with violations adds a warning without fail_on_violations"""
+    _ = test_setup
+    task = ValidateGraph(
+        context_graph=_.persons_graph, shape_graph=_.shapes_graph, fail_on_violations=False
+    )
+    report = _execute_and_get_report(task)
+    assert report.error is None
+    assert report.warnings == ["Found 1 Violations in 1 / 4 Resources."]
 
 
 def test_output_results(test_setup: TestSetup) -> None:
@@ -172,16 +292,7 @@ def test_different_query(test_setup: TestSetup) -> None:
     result = task.execute(context=TestExecutionContext(), inputs=[])
     assert isinstance(result, Entities)
     assert len(list(result.entities)) == 1, "There should be a single violation entity"
-    query = """
-PREFIX di: <https://vocab.eccenca.com/di/>
-SELECT DISTINCT ?resource
-FROM <{{context_graph}}>
-WHERE {
-    ?resource a di:Dataset.
-    FILTER isIRI(?resource)
-}
-"""
-    task.sparql_query = query
+    task.sparql_query = NO_SHAPE_TARGET_QUERY
     assert task.execute(context=TestExecutionContext(), inputs=[]) is None, (
         "Should no violations, since no person was validated"
     )

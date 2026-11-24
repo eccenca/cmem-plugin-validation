@@ -7,6 +7,15 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/) and this p
 
 ## [Unreleased]
 
+### Fixed
+
+- Validate Knowledge Graph task with `Fail workflow on violations` no longer fails the
+  workflow when the validation finds no violations
+- Validate Knowledge Graph task no longer reports a warning when the validation finds no
+  violations
+- Validate Knowledge Graph task fails with the error of the validation process when the
+  process ends with an error or is cancelled on the server, instead of reporting it as validated
+
 ### Changed
 
 - updated dependencies and template
